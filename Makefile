@@ -1,6 +1,6 @@
 # Planejador de mergulho — João Pessoa
 #   make instalar                          cria o ambiente Python e instala o pdfplumber
-#   make atualizar PDF=tabua_2027.pdf      grava a tábua DHN no planejador.html (aceita URL e vários PDFs)
+#   make atualizar PDF=tabua_2027.pdf      grava a tábua DHN no index.html (aceita URL e vários PDFs)
 #   make abrir                             abre a página no navegador
 #   make limpar                            remove o ambiente Python
 
@@ -30,7 +30,7 @@ checar-pdf:
 	@test -n "$(PDF)" || { echo "Informe o PDF: make atualizar PDF=TABUA_CABEDELO_2027.pdf"; exit 1; }
 
 abrir:
-	@xdg-open planejador.html 2>/dev/null || open planejador.html 2>/dev/null || echo "Abra planejador.html no navegador."
+	@xdg-open index.html 2>/dev/null || open index.html 2>/dev/null || echo "Abra index.html no navegador."
 
 limpar:
 	rm -rf $(VENV)

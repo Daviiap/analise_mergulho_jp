@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atualiza a tábua de marés embutida em planejador.html a partir do PDF oficial DHN.
+"""Atualiza a tábua de marés embutida em index.html a partir do PDF oficial DHN.
 
 A página não consegue baixar o PDF sozinha (o site da AESA não permite acesso pelo
 navegador), então as baixa-mares ficam gravadas dentro do HTML. Rode este script
@@ -10,7 +10,7 @@ Requer Python >= 3.10 e: pip install "pdfplumber>=0.11,<1"
 Uso:
     python atualizar_mares.py TABUA_CABEDELO_2027.pdf
     python atualizar_mares.py https://.../PORTO-DE-CABEDELO.pdf
-    python atualizar_mares.py tabua.pdf --html outro/planejador.html
+    python atualizar_mares.py tabua.pdf --html outro/index.html
 
 O ano é lido do cabeçalho do PDF. Dados de outros anos já gravados são mantidos;
 os do mesmo ano são substituídos. Alturas em metros sobre o nível de redução DHN,
@@ -114,8 +114,8 @@ def tides(data):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('pdf', nargs='+', help='caminho ou URL do PDF DHN do Porto de Cabedelo (um por ano)')
-    p.add_argument('--html', default=str(Path(__file__).with_name('planejador.html')),
-                   help='página a atualizar (padrão: planejador.html ao lado deste script)')
+    p.add_argument('--html', default=str(Path(__file__).with_name('index.html')),
+                   help='página a atualizar (padrão: index.html ao lado deste script)')
     args = p.parse_args()
 
     page = Path(args.html)
