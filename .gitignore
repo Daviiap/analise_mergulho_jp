@@ -1,0 +1,7 @@
+# Ambiente Python criado pelo make instalar
+.venv/
+__pycache__/
+*.pyc
+
+# Logs de ferramentas locais
+*.log

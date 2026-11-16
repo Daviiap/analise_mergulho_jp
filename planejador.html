@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planejador de Mergulho</title>
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+<style>
+:root{
+  --bg:#ffffff;--fg:#173047;--muted:#55687a;--line:#d5dde4;--panel:#f4f7f9;--head:#173047;--headfg:#fff;
+  --verde-bg:#d7f5df;--verde-fg:#14532d;--amarelo-bg:#fff1b8;--amarelo-fg:#713f12;
+  --vermelho-bg:#fee2e2;--vermelho-fg:#7f1d1d;--cinza-bg:#e5e7eb;--cinza-fg:#374151;
+  --exc:#065f46;--bom:#16a34a;--regular:#f59e0b;--ruim:#dc2626;--pess:#7f1d1d;--indef:#6b7280;--accent:#0e7490;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1720;--fg:#e3eaf0;--muted:#9fb0bf;--line:#2c3a47;--panel:#16212c;--head:#0b2233;--headfg:#e3eaf0;
+  --verde-bg:#12371f;--verde-fg:#a7f3c0;--amarelo-bg:#3d3210;--amarelo-fg:#fde68a;
+  --vermelho-bg:#421616;--vermelho-fg:#fecaca;--cinza-bg:#2a323b;--cinza-fg:#cbd5e1;--accent:#22a5c4;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1720;--fg:#e3eaf0;--muted:#9fb0bf;--line:#2c3a47;--panel:#16212c;--head:#0b2233;--headfg:#e3eaf0;
+  --verde-bg:#12371f;--verde-fg:#a7f3c0;--amarelo-bg:#3d3210;--amarelo-fg:#fde68a;
+  --vermelho-bg:#421616;--vermelho-fg:#fecaca;--cinza-bg:#2a323b;--cinza-fg:#cbd5e1;--accent:#22a5c4;
+}
+*{box-sizing:border-box}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:var(--bg);color:var(--fg)}
+main{max-width:1440px;margin:0 auto;padding:20px 16px 48px}
+h1{margin:0 0 4px;font-size:26px}h2{margin:32px 0 10px;font-size:20px}h3{margin:16px 0 6px;font-size:16px}
+p{max-width:75ch}.muted{color:var(--muted)}.sm{font-size:12px;color:var(--muted)}
+form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:3px}
+input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:0}
+details>summary{cursor:pointer;font-weight:600;margin:4px 0}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+button,.btn{font:inherit;font-weight:600;border:0;border-radius:8px;padding:8px 16px;background:var(--accent);color:#fff;cursor:pointer}
+button.sec,.btn.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.6;cursor:wait}
+#status{font-size:13px}#status.erro{color:var(--ruim)}
+.avisos{background:var(--amarelo-bg);color:var(--amarelo-fg);border-radius:8px;padding:8px 12px;font-size:13px}
+.avisos:empty{display:none}
+.top{padding-left:22px}.top li{margin:6px 0}
+.tag{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em}
+.tag.exc{background:var(--exc)}.tag.pess{background:var(--pess)}.tag.bom{background:var(--bom)}.tag.regular{background:var(--regular);color:#111}.tag.ruim{background:var(--ruim)}.tag.indef{background:var(--indef)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px}
+.card{border-radius:10px;padding:10px;background:var(--panel);border-left:6px solid var(--indef)}
+.card.exc{border-left-color:var(--exc)}.card.pess{border-left-color:var(--pess)}.card.bom{border-left-color:var(--bom)}.card.regular{border-left-color:var(--regular)}.card.ruim{border-left-color:var(--ruim)}
+.card .d{font-size:13px;margin-bottom:4px}
+.slot{font-size:12px;margin:6px 0;cursor:pointer}.slot .lw{display:block;white-space:nowrap}
+.slot .why{display:none;margin-top:3px;font-size:11px;color:var(--muted)}.slot.open .why{display:block}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;font-size:13px;width:max-content;min-width:100%}
+td,th{padding:7px 9px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--head);color:var(--headfg);font-weight:600;white-space:nowrap}
+tbody.dia{border-top:1.5px solid var(--muted)}
+tbody.dia td{padding:3px 8px;font-size:12.5px;line-height:1.35}
+td.data{vertical-align:middle;padding:8px 12px!important;font-size:13px!important;color:var(--muted);
+  background:var(--panel);min-width:74px;white-space:nowrap}
+td.data b{display:block;font-size:19px;color:var(--fg)}
+td.per{text-align:center;padding:3px 4px!important}td.hora{font-weight:600;white-space:nowrap}
+td.ver{font-weight:700}
+td small{display:block;font-size:11px;opacity:.8;white-space:nowrap}
+.verde{background:var(--verde-bg);color:var(--verde-fg)}.amarelo{background:var(--amarelo-bg);color:var(--amarelo-fg)}
+.vermelho{background:var(--vermelho-bg);color:var(--vermelho-fg)}.sem-dados{background:var(--cinza-bg);color:var(--cinza-fg)}
+td.v-exc{background:var(--exc);color:#fff}td.v-pess{background:var(--pess);color:#fff}td.v-bom{background:var(--bom);color:#fff}td.v-regular{background:var(--regular);color:#111}
+td.v-ruim{background:var(--ruim);color:#fff}td.v-indef{background:var(--indef);color:#fff}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font-size:12px;max-height:340px}
+#resultado[hidden]{display:none}
+@media (max-width:520px){h1{font-size:22px}.fields{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>Planejador de mergulho — João Pessoa</h1>
+<p class="muted">Baixa-mares da tábua DHN (Porto de Cabedelo), vento, ondas e corrente da Open-Meteo
+e Lua calculada localmente. Um veredicto por baixa-mar, de dia e de noite.</p>
+
+<form id="form">
+  <div class="fields">
+    <label>Início<input type="date" name="inicio" required></label>
+    <label>Dias à frente (0–15)<input type="number" name="dias" min="0" max="15" step="1" value="15" required></label>
+  </div>
+  <details>
+    <summary>Critérios e local</summary>
+    <div class="fields">
+      <label>Maré máx. (m, menor que)<input type="number" name="mare_max" step="0.01" min="0.01" value="0.4"></label>
+      <label>Ondas máx. (m)<input type="number" name="onda_max" step="0.05" min="0.05" value="1.0"></label>
+      <label>Vento máx. (km/h)<input type="number" name="vento_max" step="0.5" min="0.5" value="15"></label>
+      <label>Corrente máx. (km/h)<input type="number" name="corrente_max" step="0.05" min="0.05" value="0.5"></label>
+      <label>Margem amarela (%)<input type="number" name="margem" step="1" min="0" max="200" value="20"></label>
+      <label>Dia começa (h)<input type="number" name="hora_inicio" min="0" max="23" value="6"></label>
+      <label>Dia termina (h)<input type="number" name="hora_fim" min="1" max="24" value="17"></label>
+      <label>Latitude<input type="number" name="lat" step="0.0001" min="-90" max="90" value="-7.10"></label>
+      <label>Longitude<input type="number" name="lon" step="0.0001" min="-180" max="180" value="-34.80"></label>
+    </div>
+  </details>
+  <div class="actions">
+    <button type="submit" id="consultar">Consultar</button>
+    <button type="button" class="sec" id="padrao">Restaurar padrões</button>
+    <span id="status" role="status"></span>
+  </div>
+</form>
+
+<div class="avisos" id="avisos"></div>
+
+<section id="resultado" hidden>
+  <h2 id="titulo"></h2>
+  <p class="sm" id="consulta"></p>
+  <h2>Melhores oportunidades</h2>
+  <div id="tops"></div>
+  <h2>Dia a dia</h2>
+  <p class="sm">☀ dia · ☾ noite/madrugada. Toque ou clique numa janela para ver o motivo.</p>
+  <div class="grid" id="cards"></div>
+  <h2>Detalhes</h2>
+  <div class="actions" style="margin:0 0 8px"><button type="button" class="sec" id="csv">Baixar CSV</button>
+    <span class="sm">Cores: <span class="verde">&nbsp;favorável&nbsp;</span> <span class="amarelo">&nbsp;no limite&nbsp;</span>
+    <span class="vermelho">&nbsp;desfavorável&nbsp;</span> <span class="sem-dados">&nbsp;sem dados&nbsp;</span> ·
+    passe o mouse numa célula para ver o limite e no veredicto para ver o motivo</span></div>
+  <div class="scroll"><table id="tabela"></table></div>
+  <h2>Como o veredicto é definido</h2>
+  <div id="regras"></div>
+  <details><summary>Modelos, coordenadas e erros (metadados)</summary><pre id="meta"></pre></details>
+  <p class="sm">Dados: <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0) com modelos ECMWF, Météo-France e NOAA/NCEP ·
+    <a href="https://open-meteo.com/en/docs/marine-weather-api">documentação dos modelos</a> ·
+    Marés: DHN/Marinha do Brasil · Lua: astronomy-engine.</p>
+</section>
+</main>
+
+<script type="application/json" id="mares">{"fonte": "DHN/Marinha do Brasil — Porto de Cabedelo", "referencia": "metros sobre o nível de redução da tábua DHN", "fuso": "America/Recife", "origem": {"2026": "https://www.aesa.pb.gov.br/assets/uploads/2026/02/23-PORTO-DE-CABEDELO-79-81.pdf"}, "anos": [2026], "baixamares": [["2026-01-01T08:27", 0.32], ["2026-01-01T21:04", 0.12], ["2026-01-02T09:19", 0.24], ["2026-01-02T21:57", 0.01], ["2026-01-03T10:10", 0.18], ["2026-01-03T22:46", -0.05], ["2026-01-04T10:59", 0.16], ["2026-01-04T23:32", -0.05], ["2026-01-05T11:42", 0.18], ["2026-01-06T00:16", 0.01], ["2026-01-06T12:23", 0.25], ["2026-01-07T00:59", 0.13], ["2026-01-07T13:04", 0.35], ["2026-01-08T01:40", 0.29], ["2026-01-08T13:47", 0.48], ["2026-01-09T02:23", 0.46], ["2026-01-09T14:32", 0.61], ["2026-01-10T03:10", 0.62], ["2026-01-10T15:32", 0.72], ["2026-01-11T04:06", 0.75], ["2026-01-11T16:40", 0.78], ["2026-01-12T05:16", 0.81], ["2026-01-12T17:51", 0.78], ["2026-01-13T06:25", 0.8], ["2026-01-13T19:04", 0.71], ["2026-01-14T07:25", 0.74], ["2026-01-14T19:59", 0.61], ["2026-01-15T08:12", 0.65], ["2026-01-15T20:46", 0.49], ["2026-01-16T08:55", 0.55], ["2026-01-16T21:21", 0.38], ["2026-01-17T09:31", 0.45], ["2026-01-17T22:01", 0.28], ["2026-01-18T10:06", 0.36], ["2026-01-18T22:32", 0.2], ["2026-01-19T10:42", 0.29], ["2026-01-19T23:06", 0.15], ["2026-01-20T11:14", 0.25], ["2026-01-20T23:40", 0.13], ["2026-01-21T11:49", 0.23], ["2026-01-22T00:12", 0.14], ["2026-01-22T12:23", 0.25], ["2026-01-23T00:51", 0.19], ["2026-01-23T13:02", 0.3], ["2026-01-24T01:29", 0.29], ["2026-01-24T13:49", 0.39], ["2026-01-25T02:16", 0.41], ["2026-01-25T14:46", 0.49], ["2026-01-26T03:14", 0.53], ["2026-01-26T15:59", 0.57], ["2026-01-27T04:31", 0.63], ["2026-01-27T17:21", 0.58], ["2026-01-28T05:59", 0.65], ["2026-01-28T18:51", 0.5], ["2026-01-29T07:17", 0.57], ["2026-01-29T20:02", 0.34], ["2026-01-30T08:21", 0.44], ["2026-01-30T21:01", 0.17], ["2026-01-31T09:12", 0.3], ["2026-01-31T21:49", 0.04], ["2026-02-01T10:01", 0.19], ["2026-02-01T22:31", -0.05], ["2026-02-02T10:44", 0.12], ["2026-02-02T23:12", -0.07], ["2026-02-03T11:19", 0.1], ["2026-02-03T23:51", -0.02], ["2026-02-04T11:59", 0.14], ["2026-02-05T00:25", 0.09], ["2026-02-05T12:32", 0.23], ["2026-02-06T00:59", 0.24], ["2026-02-06T13:06", 0.36], ["2026-02-07T01:31", 0.43], ["2026-02-07T13:44", 0.52], ["2026-02-08T02:06", 0.62], ["2026-02-08T14:25", 0.69], ["2026-02-09T02:53", 0.79], ["2026-02-09T15:32", 0.83], ["2026-02-10T04:01", 0.93], ["2026-02-10T17:01", 0.89], ["2026-02-11T05:42", 0.96], ["2026-02-11T18:38", 0.84], ["2026-02-12T07:02", 0.89], ["2026-02-12T19:44", 0.71], ["2026-02-13T07:59", 0.75], ["2026-02-13T20:29", 0.55], ["2026-02-14T08:40", 0.61], ["2026-02-14T21:06", 0.4], ["2026-02-15T09:14", 0.47], ["2026-02-15T21:42", 0.27], ["2026-02-16T09:51", 0.34], ["2026-02-16T22:12", 0.17], ["2026-02-17T10:23", 0.23], ["2026-02-17T22:46", 0.1], ["2026-02-18T10:57", 0.16], ["2026-02-18T23:17", 0.07], ["2026-02-19T11:29", 0.14], ["2026-02-19T23:53", 0.1], ["2026-02-20T12:04", 0.16], ["2026-02-21T00:25", 0.18], ["2026-02-21T12:44", 0.25], ["2026-02-22T01:02", 0.32], ["2026-02-22T13:25", 0.38], ["2026-02-23T01:49", 0.5], ["2026-02-23T14:19", 0.54], ["2026-02-24T02:46", 0.69], ["2026-02-24T15:40", 0.69], ["2026-02-25T04:10", 0.84], ["2026-02-25T17:19", 0.73], ["2026-02-26T05:57", 0.85], ["2026-02-26T18:57", 0.62], ["2026-02-27T07:19", 0.74], ["2026-02-27T20:02", 0.45], ["2026-02-28T08:16", 0.57], ["2026-02-28T20:53", 0.28], ["2026-03-01T09:02", 0.4], ["2026-03-01T21:32", 0.15], ["2026-03-02T09:44", 0.27], ["2026-03-02T22:08", 0.08], ["2026-03-03T10:19", 0.19], ["2026-03-03T22:46", 0.06], ["2026-03-04T10:55", 0.15], ["2026-03-04T23:17", 0.11], ["2026-03-05T11:25", 0.17], ["2026-03-05T23:49", 0.2], ["2026-03-06T11:59", 0.25], ["2026-03-07T00:16", 0.33], ["2026-03-07T12:29", 0.37], ["2026-03-08T00:46", 0.49], ["2026-03-08T13:01", 0.52], ["2026-03-09T01:14", 0.66], ["2026-03-09T13:36", 0.7], ["2026-03-10T01:53", 0.85], ["2026-03-10T14:29", 0.87], ["2026-03-11T02:51", 1.01], ["2026-03-11T16:04", 0.98], ["2026-03-12T04:47", 1.09], ["2026-03-12T17:53", 0.94], ["2026-03-13T06:19", 1.01], ["2026-03-13T19:08", 0.8], ["2026-03-14T07:23", 0.85], ["2026-03-14T19:57", 0.62], ["2026-03-15T08:06", 0.67], ["2026-03-15T20:34", 0.45], ["2026-03-16T08:46", 0.5], ["2026-03-16T21:08", 0.3], ["2026-03-17T09:19", 0.34], ["2026-03-17T21:44", 0.18], ["2026-03-18T09:59", 0.2], ["2026-03-18T22:17", 0.11], ["2026-03-19T10:34", 0.12], ["2026-03-19T22:55", 0.09], ["2026-03-20T11:08", 0.1], ["2026-03-20T23:29", 0.14], ["2026-03-21T11:49", 0.14], ["2026-03-22T00:06", 0.25], ["2026-03-22T12:29", 0.26], ["2026-03-23T00:47", 0.43], ["2026-03-23T13:16", 0.43], ["2026-03-24T01:34", 0.64], ["2026-03-24T14:17", 0.63], ["2026-03-25T02:38", 0.85], ["2026-03-25T15:51", 0.77], ["2026-03-26T04:21", 0.98], ["2026-03-26T17:32", 0.78], ["2026-03-27T06:02", 0.94], ["2026-03-27T18:57", 0.65], ["2026-03-28T07:16", 0.8], ["2026-03-28T19:53", 0.51], ["2026-03-29T08:06", 0.64], ["2026-03-29T20:38", 0.39], ["2026-03-30T08:49", 0.49], ["2026-03-30T21:12", 0.3], ["2026-03-31T09:25", 0.39], ["2026-03-31T21:47", 0.27], ["2026-04-01T09:59", 0.31], ["2026-04-01T22:16", 0.27], ["2026-04-02T10:29", 0.29], ["2026-04-02T22:47", 0.31], ["2026-04-03T11:01", 0.3], ["2026-04-03T23:14", 0.39], ["2026-04-04T11:29", 0.37], ["2026-04-04T23:44", 0.49], ["2026-04-05T12:01", 0.47], ["2026-04-06T00:08", 0.62], ["2026-04-06T12:29", 0.61], ["2026-04-07T00:38", 0.76], ["2026-04-07T13:04", 0.75], ["2026-04-08T01:12", 0.92], ["2026-04-08T13:51", 0.91], ["2026-04-09T02:04", 1.07], ["2026-04-09T15:17", 1.01], ["2026-04-10T03:46", 1.15], ["2026-04-10T16:57", 1.0], ["2026-04-11T05:25", 1.09], ["2026-04-11T18:14", 0.88], ["2026-04-12T06:31", 0.94], ["2026-04-12T19:06", 0.71], ["2026-04-13T07:21", 0.75], ["2026-04-13T19:51", 0.54], ["2026-04-14T08:04", 0.56], ["2026-04-14T20:29", 0.39], ["2026-04-15T08:47", 0.39], ["2026-04-15T21:06", 0.26], ["2026-04-16T09:25", 0.24], ["2026-04-16T21:47", 0.19], ["2026-04-17T10:06", 0.15], ["2026-04-17T22:25", 0.18], ["2026-04-18T10:51", 0.12], ["2026-04-18T23:06", 0.23], ["2026-04-19T11:34", 0.16], ["2026-04-19T23:51", 0.34], ["2026-04-20T12:21", 0.27], ["2026-04-21T00:36", 0.51], ["2026-04-21T13:14", 0.43], ["2026-04-22T01:29", 0.7], ["2026-04-22T14:23", 0.61], ["2026-04-23T02:40", 0.88], ["2026-04-23T15:49", 0.72], ["2026-04-24T04:14", 0.96], ["2026-04-24T17:14", 0.73], ["2026-04-25T05:38", 0.92], ["2026-04-25T18:29", 0.66], ["2026-04-26T06:47", 0.81], ["2026-04-26T19:23", 0.57], ["2026-04-27T07:42", 0.68], ["2026-04-27T20:06", 0.5], ["2026-04-28T08:21", 0.57], ["2026-04-28T20:46", 0.46], ["2026-04-29T09:01", 0.48], ["2026-04-29T21:16", 0.44], ["2026-04-30T09:34", 0.43], ["2026-04-30T21:49", 0.45], ["2026-05-01T10:06", 0.4], ["2026-05-01T22:17", 0.48], ["2026-05-02T10:40", 0.42], ["2026-05-02T22:51", 0.53], ["2026-05-03T11:10", 0.46], ["2026-05-03T23:19", 0.6], ["2026-05-04T11:44", 0.55], ["2026-05-04T23:51", 0.7], ["2026-05-05T12:16", 0.65], ["2026-05-06T00:21", 0.82], ["2026-05-06T12:55", 0.76], ["2026-05-07T01:02", 0.93], ["2026-05-07T13:40", 0.87], ["2026-05-08T01:55", 1.04], ["2026-05-08T14:47", 0.94], ["2026-05-09T03:08", 1.09], ["2026-05-09T16:04", 0.94], ["2026-05-10T04:34", 1.05], ["2026-05-10T17:14", 0.87], ["2026-05-11T05:36", 0.94], ["2026-05-11T18:12", 0.75], ["2026-05-12T06:32", 0.79], ["2026-05-12T19:02", 0.61], ["2026-05-13T07:23", 0.62], ["2026-05-13T19:51", 0.49], ["2026-05-14T08:12", 0.46], ["2026-05-14T20:36", 0.39], ["2026-05-15T09:01", 0.32], ["2026-05-15T21:17", 0.33], ["2026-05-16T09:51", 0.22], ["2026-05-16T22:04", 0.31], ["2026-05-17T10:36", 0.18], ["2026-05-17T22:53", 0.34], ["2026-05-18T11:25", 0.19], ["2026-05-18T23:42", 0.42], ["2026-05-19T12:17", 0.26], ["2026-05-20T00:29", 0.53], ["2026-05-20T13:12", 0.38], ["2026-05-21T01:25", 0.67], ["2026-05-21T14:16", 0.52], ["2026-05-22T02:27", 0.8], ["2026-05-22T15:25", 0.63], ["2026-05-23T03:44", 0.87], ["2026-05-23T16:36", 0.69], ["2026-05-24T04:57", 0.88], ["2026-05-24T17:44", 0.7], ["2026-05-25T06:01", 0.83], ["2026-05-25T18:42", 0.69], ["2026-05-26T07:01", 0.76], ["2026-05-26T19:27", 0.66], ["2026-05-27T07:49", 0.68], ["2026-05-27T20:08", 0.63], ["2026-05-28T08:29", 0.6], ["2026-05-28T20:46", 0.61], ["2026-05-29T09:08", 0.54], ["2026-05-29T21:17", 0.59], ["2026-05-30T09:47", 0.5], ["2026-05-30T21:55", 0.58], ["2026-05-31T10:19", 0.48], ["2026-05-31T22:29", 0.59], ["2026-06-01T10:57", 0.48], ["2026-06-01T23:04", 0.61], ["2026-06-02T11:32", 0.51], ["2026-06-02T23:40", 0.66], ["2026-06-03T12:08", 0.56], ["2026-06-04T00:14", 0.72], ["2026-06-04T12:47", 0.62], ["2026-06-05T00:55", 0.79], ["2026-06-05T13:27", 0.69], ["2026-06-06T01:40", 0.86], ["2026-06-06T14:17", 0.75], ["2026-06-07T02:32", 0.9], ["2026-06-07T15:16", 0.77], ["2026-06-08T03:40", 0.9], ["2026-06-08T16:16", 0.76], ["2026-06-09T04:46", 0.84], ["2026-06-09T17:19", 0.71], ["2026-06-10T05:46", 0.75], ["2026-06-10T18:17", 0.64], ["2026-06-11T06:49", 0.63], ["2026-06-11T19:16", 0.56], ["2026-06-12T07:51", 0.5], ["2026-06-12T20:12", 0.49], ["2026-06-13T08:47", 0.36], ["2026-06-13T21:04", 0.42], ["2026-06-14T09:42", 0.25], ["2026-06-14T21:57", 0.38], ["2026-06-15T10:32", 0.17], ["2026-06-15T22:47", 0.37], ["2026-06-16T11:23", 0.15], ["2026-06-16T23:36", 0.39], ["2026-06-17T12:14", 0.18], ["2026-06-18T00:25", 0.45], ["2026-06-18T13:04", 0.27], ["2026-06-19T01:14", 0.54], ["2026-06-19T13:57", 0.4], ["2026-06-20T02:06", 0.65], ["2026-06-20T14:53", 0.54], ["2026-06-21T03:04", 0.76], ["2026-06-21T15:51", 0.68], ["2026-06-22T04:08", 0.83], ["2026-06-22T16:53", 0.77], ["2026-06-23T05:10", 0.86], ["2026-06-23T17:53", 0.82], ["2026-06-24T06:16", 0.85], ["2026-06-24T18:47", 0.83], ["2026-06-25T07:17", 0.8], ["2026-06-25T19:36", 0.8], ["2026-06-26T08:06", 0.72], ["2026-06-26T20:17", 0.76], ["2026-06-27T08:53", 0.64], ["2026-06-27T20:59", 0.7], ["2026-06-28T09:31", 0.57], ["2026-06-28T21:36", 0.65], ["2026-06-29T10:06", 0.5], ["2026-06-29T22:14", 0.6], ["2026-06-30T10:44", 0.46], ["2026-06-30T22:51", 0.57], ["2026-07-01T11:16", 0.43], ["2026-07-01T23:23", 0.56], ["2026-07-02T11:53", 0.43], ["2026-07-02T23:59", 0.57], ["2026-07-03T12:25", 0.45], ["2026-07-04T00:34", 0.59], ["2026-07-04T13:01", 0.49], ["2026-07-05T01:12", 0.63], ["2026-07-05T13:40", 0.55], ["2026-07-06T01:57", 0.68], ["2026-07-06T14:27", 0.61], ["2026-07-07T02:49", 0.72], ["2026-07-07T15:23", 0.67], ["2026-07-08T03:57", 0.74], ["2026-07-08T16:29", 0.7], ["2026-07-09T05:06", 0.72], ["2026-07-09T17:42", 0.69], ["2026-07-10T06:21", 0.65], ["2026-07-10T18:51", 0.64], ["2026-07-11T07:36", 0.52], ["2026-07-11T19:59", 0.55], ["2026-07-12T08:40", 0.36], ["2026-07-12T20:57", 0.45], ["2026-07-13T09:36", 0.21], ["2026-07-13T21:49", 0.36], ["2026-07-14T10:25", 0.1], ["2026-07-14T22:40", 0.29], ["2026-07-15T11:14", 0.04], ["2026-07-15T23:25", 0.26], ["2026-07-16T12:01", 0.06], ["2026-07-17T00:08", 0.29], ["2026-07-17T12:44", 0.15], ["2026-07-18T00:53", 0.37], ["2026-07-18T13:25", 0.3], ["2026-07-19T01:36", 0.5], ["2026-07-19T14:10", 0.48], ["2026-07-20T02:21", 0.64], ["2026-07-20T14:59", 0.67], ["2026-07-21T03:17", 0.78], ["2026-07-21T15:55", 0.83], ["2026-07-22T04:21", 0.88], ["2026-07-22T17:02", 0.93], ["2026-07-23T05:36", 0.92], ["2026-07-23T18:12", 0.95], ["2026-07-24T06:57", 0.88], ["2026-07-24T19:16", 0.91], ["2026-07-25T07:59", 0.78], ["2026-07-25T20:06", 0.83], ["2026-07-26T08:44", 0.67], ["2026-07-26T20:49", 0.74], ["2026-07-27T09:21", 0.56], ["2026-07-27T21:23", 0.64], ["2026-07-28T09:57", 0.47], ["2026-07-28T22:01", 0.56], ["2026-07-29T10:27", 0.39], ["2026-07-29T22:34", 0.49], ["2026-07-30T11:01", 0.34], ["2026-07-30T23:06", 0.44], ["2026-07-31T11:31", 0.32], ["2026-07-31T23:38", 0.43], ["2026-08-01T12:01", 0.34], ["2026-08-02T00:08", 0.44], ["2026-08-02T12:31", 0.38], ["2026-08-03T00:46", 0.48], ["2026-08-03T13:06", 0.46], ["2026-08-04T01:23", 0.55], ["2026-08-04T13:49", 0.56], ["2026-08-05T02:12", 0.64], ["2026-08-05T14:42", 0.68], ["2026-08-06T03:19", 0.73], ["2026-08-06T15:49", 0.79], ["2026-08-07T04:44", 0.77], ["2026-08-07T17:17", 0.82], ["2026-08-08T06:14", 0.71], ["2026-08-08T18:42", 0.76], ["2026-08-09T07:32", 0.56], ["2026-08-09T19:53", 0.62], ["2026-08-10T08:34", 0.37], ["2026-08-10T20:47", 0.47], ["2026-08-11T09:23", 0.2], ["2026-08-11T21:36", 0.33], ["2026-08-12T10:10", 0.07], ["2026-08-12T22:21", 0.23], ["2026-08-13T10:53", 0.02], ["2026-08-13T23:02", 0.18], ["2026-08-14T11:32", 0.05], ["2026-08-14T23:44", 0.2], ["2026-08-15T12:10", 0.14], ["2026-08-16T00:19", 0.28], ["2026-08-16T12:47", 0.29], ["2026-08-17T00:59", 0.41], ["2026-08-17T13:21", 0.49], ["2026-08-18T01:36", 0.57], ["2026-08-18T14:01", 0.69], ["2026-08-19T02:21", 0.75], ["2026-08-19T14:49", 0.88], ["2026-08-20T03:27", 0.9], ["2026-08-20T16:01", 1.02], ["2026-08-21T04:55", 0.98], ["2026-08-21T17:36", 1.05], ["2026-08-22T06:32", 0.93], ["2026-08-22T18:53", 0.97], ["2026-08-23T07:38", 0.8], ["2026-08-23T19:47", 0.84], ["2026-08-24T08:21", 0.66], ["2026-08-24T20:27", 0.71], ["2026-08-25T08:59", 0.52], ["2026-08-25T21:04", 0.58], ["2026-08-26T09:31", 0.4], ["2026-08-26T21:38", 0.46], ["2026-08-27T10:02", 0.31], ["2026-08-27T22:10", 0.37], ["2026-08-28T10:32", 0.25], ["2026-08-28T22:44", 0.31], ["2026-08-29T11:04", 0.23], ["2026-08-29T23:14", 0.29], ["2026-08-30T11:36", 0.26], ["2026-08-30T23:49", 0.32], ["2026-08-31T12:06", 0.33], ["2026-09-01T00:23", 0.39], ["2026-09-01T12:42", 0.45], ["2026-09-02T01:04", 0.5], ["2026-09-02T13:21", 0.61], ["2026-09-03T01:57", 0.64], ["2026-09-03T14:16", 0.78], ["2026-09-04T03:10", 0.78], ["2026-09-04T15:38", 0.92], ["2026-09-05T04:49", 0.82], ["2026-09-05T17:25", 0.93], ["2026-09-06T06:25", 0.72], ["2026-09-06T18:49", 0.81], ["2026-09-07T07:36", 0.54], ["2026-09-07T19:51", 0.63], ["2026-09-08T08:27", 0.36], ["2026-09-08T20:38", 0.47], ["2026-09-09T09:10", 0.21], ["2026-09-09T21:21", 0.33], ["2026-09-10T09:51", 0.13], ["2026-09-10T22:02", 0.23], ["2026-09-11T10:27", 0.11], ["2026-09-11T22:40", 0.19], ["2026-09-12T11:02", 0.15], ["2026-09-12T23:12", 0.21], ["2026-09-13T11:36", 0.24], ["2026-09-13T23:47", 0.29], ["2026-09-14T12:06", 0.38], ["2026-09-15T00:19", 0.42], ["2026-09-15T12:36", 0.55], ["2026-09-16T00:55", 0.58], ["2026-09-16T13:06", 0.74], ["2026-09-17T01:32", 0.75], ["2026-09-17T13:47", 0.92], ["2026-09-18T02:27", 0.92], ["2026-09-18T14:51", 1.08], ["2026-09-19T04:04", 1.02], ["2026-09-19T16:55", 1.12], ["2026-09-20T05:51", 0.98], ["2026-09-20T18:14", 1.03], ["2026-09-21T07:01", 0.84], ["2026-09-21T19:12", 0.87], ["2026-09-22T07:46", 0.67], ["2026-09-22T19:53", 0.71], ["2026-09-23T08:21", 0.52], ["2026-09-23T20:27", 0.55], ["2026-09-24T08:55", 0.38], ["2026-09-24T21:02", 0.4], ["2026-09-25T09:25", 0.27], ["2026-09-25T21:38", 0.29], ["2026-09-26T10:01", 0.2], ["2026-09-26T22:12", 0.21], ["2026-09-27T10:32", 0.18], ["2026-09-27T22:51", 0.18], ["2026-09-28T11:06", 0.21], ["2026-09-28T23:25", 0.21], ["2026-09-29T11:44", 0.3], ["2026-09-30T00:06", 0.29], ["2026-09-30T12:21", 0.44], ["2026-10-01T00:55", 0.43], ["2026-10-01T13:08", 0.62], ["2026-10-02T01:51", 0.6], ["2026-10-02T14:10", 0.81], ["2026-10-03T03:17", 0.73], ["2026-10-03T15:47", 0.93], ["2026-10-04T04:55", 0.74], ["2026-10-04T17:27", 0.88], ["2026-10-05T06:21", 0.63], ["2026-10-05T18:42", 0.74], ["2026-10-06T07:21", 0.47], ["2026-10-06T19:38", 0.57], ["2026-10-07T08:10", 0.34], ["2026-10-07T20:21", 0.43], ["2026-10-08T08:51", 0.24], ["2026-10-08T21:02", 0.31], ["2026-10-09T09:25", 0.2], ["2026-10-09T21:40", 0.25], ["2026-10-10T10:01", 0.21], ["2026-10-10T22:14", 0.23], ["2026-10-11T10:32", 0.26], ["2026-10-11T22:49", 0.25], ["2026-10-12T11:04", 0.34], ["2026-10-12T23:19", 0.33], ["2026-10-13T11:34", 0.46], ["2026-10-13T23:53", 0.44], ["2026-10-14T12:02", 0.6], ["2026-10-15T00:25", 0.58], ["2026-10-15T12:32", 0.75], ["2026-10-16T01:02", 0.73], ["2026-10-16T13:08", 0.91], ["2026-10-17T01:53", 0.88], ["2026-10-17T14:04", 1.05], ["2026-10-18T03:21", 0.98], ["2026-10-18T15:57", 1.11], ["2026-10-19T04:55", 0.96], ["2026-10-19T17:23", 1.03], ["2026-10-20T06:08", 0.85], ["2026-10-20T18:21", 0.89], ["2026-10-21T06:57", 0.7], ["2026-10-21T19:08", 0.72], ["2026-10-22T07:36", 0.55], ["2026-10-22T19:49", 0.55], ["2026-10-23T08:12", 0.41], ["2026-10-23T20:25", 0.4], ["2026-10-24T08:49", 0.3], ["2026-10-24T21:04", 0.26], ["2026-10-25T09:23", 0.22], ["2026-10-25T21:46", 0.17], ["2026-10-26T10:02", 0.19], ["2026-10-26T22:25", 0.12], ["2026-10-27T10:44", 0.21], ["2026-10-27T23:08", 0.13], ["2026-10-28T11:23", 0.29], ["2026-10-28T23:57", 0.21], ["2026-10-29T12:08", 0.41], ["2026-10-30T00:47", 0.33], ["2026-10-30T13:01", 0.57], ["2026-10-31T01:49", 0.47], ["2026-10-31T14:04", 0.72], ["2026-11-01T03:08", 0.58], ["2026-11-01T15:32", 0.81], ["2026-11-02T04:31", 0.61], ["2026-11-02T17:01", 0.78], ["2026-11-03T05:49", 0.56], ["2026-11-03T18:10", 0.68], ["2026-11-04T06:51", 0.47], ["2026-11-04T19:06", 0.55], ["2026-11-05T07:40", 0.39], ["2026-11-05T19:55", 0.43], ["2026-11-06T08:19", 0.34], ["2026-11-06T20:36", 0.34], ["2026-11-07T08:59", 0.31], ["2026-11-07T21:12", 0.29], ["2026-11-08T09:31", 0.32], ["2026-11-08T21:51", 0.26], ["2026-11-09T10:04", 0.34], ["2026-11-09T22:23", 0.27], ["2026-11-10T10:36", 0.39], ["2026-11-10T23:01", 0.31], ["2026-11-11T11:08", 0.46], ["2026-11-11T23:34", 0.39], ["2026-11-12T11:42", 0.55], ["2026-11-13T00:08", 0.49], ["2026-11-13T12:14", 0.66], ["2026-11-14T00:49", 0.6], ["2026-11-14T12:55", 0.77], ["2026-11-15T01:32", 0.71], ["2026-11-15T13:44", 0.88], ["2026-11-16T02:32", 0.79], ["2026-11-16T14:53", 0.95], ["2026-11-17T03:47", 0.82], ["2026-11-17T16:17", 0.92], ["2026-11-18T04:55", 0.77], ["2026-11-18T17:19", 0.83], ["2026-11-19T05:55", 0.68], ["2026-11-19T18:14", 0.69], ["2026-11-20T06:46", 0.56], ["2026-11-20T19:04", 0.54], ["2026-11-21T07:31", 0.44], ["2026-11-21T19:53", 0.39], ["2026-11-22T08:14", 0.34], ["2026-11-22T20:40", 0.25], ["2026-11-23T09:01", 0.26], ["2026-11-23T21:25", 0.14], ["2026-11-24T09:44", 0.21], ["2026-11-24T22:12", 0.07], ["2026-11-25T10:27", 0.21], ["2026-11-25T23:02", 0.05], ["2026-11-26T11:14", 0.25], ["2026-11-26T23:53", 0.09], ["2026-11-27T12:02", 0.32], ["2026-11-28T00:46", 0.17], ["2026-11-28T12:55", 0.44], ["2026-11-29T01:42", 0.29], ["2026-11-29T13:55", 0.56], ["2026-11-30T02:47", 0.42], ["2026-11-30T15:02", 0.65], ["2026-12-01T03:55", 0.51], ["2026-12-01T16:17", 0.68], ["2026-12-02T05:04", 0.55], ["2026-12-02T17:25", 0.66], ["2026-12-03T06:08", 0.55], ["2026-12-03T18:31", 0.6], ["2026-12-04T07:04", 0.53], ["2026-12-04T19:25", 0.52], ["2026-12-05T07:51", 0.5], ["2026-12-05T20:10", 0.44], ["2026-12-06T08:29", 0.47], ["2026-12-06T20:51", 0.38], ["2026-12-07T09:04", 0.44], ["2026-12-07T21:29", 0.33], ["2026-12-08T09:40", 0.42], ["2026-12-08T22:04", 0.29], ["2026-12-09T10:14", 0.4], ["2026-12-09T22:42", 0.29], ["2026-12-10T10:51", 0.41], ["2026-12-10T23:16", 0.3], ["2026-12-11T11:23", 0.43], ["2026-12-11T23:53", 0.34], ["2026-12-12T11:59", 0.48], ["2026-12-13T00:27", 0.39], ["2026-12-13T12:34", 0.55], ["2026-12-14T01:04", 0.46], ["2026-12-14T13:14", 0.62], ["2026-12-15T01:47", 0.54], ["2026-12-15T14:02", 0.68], ["2026-12-16T02:38", 0.6], ["2026-12-16T15:01", 0.72], ["2026-12-17T03:38", 0.63], ["2026-12-17T16:10", 0.7], ["2026-12-18T04:42", 0.62], ["2026-12-18T17:14", 0.63], ["2026-12-19T05:47", 0.56], ["2026-12-19T18:19", 0.52], ["2026-12-20T06:49", 0.48], ["2026-12-20T19:21", 0.39], ["2026-12-21T07:49", 0.39], ["2026-12-21T20:19", 0.24], ["2026-12-22T08:42", 0.29], ["2026-12-22T21:14", 0.1], ["2026-12-23T09:31", 0.2], ["2026-12-23T22:06", -0.02], ["2026-12-24T10:21", 0.14], ["2026-12-24T22:57", -0.08], ["2026-12-25T11:10", 0.12], ["2026-12-25T23:47", -0.08], ["2026-12-26T11:59", 0.15], ["2026-12-27T00:36", -0.02], ["2026-12-27T12:46", 0.23], ["2026-12-28T01:23", 0.1], ["2026-12-28T13:34", 0.34], ["2026-12-29T02:14", 0.27], ["2026-12-29T14:27", 0.47], ["2026-12-30T03:10", 0.44], ["2026-12-30T15:32", 0.59], ["2026-12-31T04:12", 0.58], ["2026-12-31T16:40", 0.66]]}</script>
+<script>
+'use strict';
+// ---------------------------------------------------------------- utilidades de tempo
+// America/Recife: UTC−3 fixo (sem horário de verão desde 2019).
+const OFFSET_MS = 3 * 3600e3;
+const parseLocal = s => new Date(s.length === 16 ? s + ':00-03:00' : s + 'T00:00:00-03:00').getTime();
+const localISO = ms => new Date(ms - OFFSET_MS).toISOString();      // texto no horário local
+const hourKey = ms => localISO(ms).slice(0, 13) + ':00';             // 'AAAA-MM-DDTHH:00'
+const localDay = ms => localISO(ms).slice(0, 10);
+const hm = ms => localISO(ms).slice(11, 16);
+const addDays = (ymd, n) => { const d = new Date(ymd + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const weekday = ymd => DIAS[new Date(ymd + 'T12:00:00Z').getUTCDay()];
+const ddmm = ymd => `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`;
+const ddmmyyyy = ymd => `${ddmm(ymd)}/${ymd.slice(0, 4)}`;
+const fin = v => typeof v === 'number' && Number.isFinite(v);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const num = (v, d = 2) => fin(v) ? v.toLocaleString('pt-BR', {minimumFractionDigits: d, maximumFractionDigits: d}) : '—';
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* armazenamento indisponível */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* idem */ } },
+};
+
+// ---------------------------------------------------------------- tábua de marés
+// Baixa-mares da tábua oficial DHN (Porto de Cabedelo), gravadas pelo atualizar_mares.py,
+// em metros sobre o nível de redução da tábua.
+function tideTables() {
+  const table = JSON.parse(document.getElementById('mares').textContent);
+  return table.baixamares.map(([s, h]) => ({ms: parseLocal(s), h})).sort((a, b) => a.ms - b.ms);
+}
+
+// ---------------------------------------------------------------- previsões Open-Meteo
+const FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
+const UNITS = {wind_speed_10m: 'km/h', ocean_current_velocity: 'km/h', wave_height: 'm', wave_period: 's'};
+// Modelos em ordem de prioridade; o seguinte só preenche horas sem dado do anterior.
+const FONTES = [
+  {nome: 'vento', url: FORECAST, fields: ['wind_speed_10m', 'wind_direction_10m'], models: ['ecmwf_ifs', 'gfs_seamless']},
+  {nome: 'ondas', url: MARINE, fields: ['wave_height', 'wave_period', 'wave_direction'],
+   models: ['ecmwf_wam', 'meteofrance_wave', 'ncep_gfswave016']},
+  {nome: 'corrente', url: MARINE, fields: ['ocean_current_velocity', 'ocean_current_direction'], models: ['meteofrance_currents']},
+];
+
+async function fetchModel(src, model, lat, lon, start, end) {
+  const params = new URLSearchParams({latitude: lat, longitude: lon, hourly: src.fields.join(','), models: model,
+    timezone: 'America/Recife', start_date: start, end_date: end, wind_speed_unit: 'kmh'});
+  const r = await fetch(`${src.url}?${params}`);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) throw new Error(data.reason || `HTTP ${r.status}`);
+  for (const f of src.fields)
+    if (data.hourly_units?.[f] !== (UNITS[f] || '°')) throw new Error(`unidade inesperada para ${f}`);
+  const values = new Map();
+  data.hourly.time.forEach((t, i) => {
+    const row = Object.fromEntries(src.fields.map(f => [f, data.hourly[f][i]]));
+    if (src.fields.every(f => fin(row[f]))) values.set(t, row);
+  });
+  const keys = [...values.keys()];
+  return {values, meta: {modelo: model, latitude: data.latitude, longitude: data.longitude,
+    primeiro_valor: keys[0] ?? null, ultimo_valor: keys.at(-1) ?? null}};
+}
+
+async function forecast(src, lat, lon, start, end, errors) {
+  const results = await Promise.allSettled(src.models.map(m => fetchModel(src, m, lat, lon, start, end)));
+  const merged = new Map(), raw = new Map(), metas = [];
+  results.forEach((res, i) => {
+    const model = src.models[i];
+    if (res.status === 'rejected') { errors.push(`${src.nome}/${model}: ${res.reason.message}`); return; }
+    metas.push(res.value.meta);
+    raw.set(model, res.value.values);
+    for (const [k, row] of res.value.values) if (!merged.has(k)) merged.set(k, {...row, modelo: model});
+  });
+  return {merged, raw, metas};
+}
+
+// Hora mais próxima (até 30 min), nunca média diária.
+function sample(series, ms, fields) {
+  const key = hourKey(ms + 30 * 60e3);
+  const row = series.get(key) || {};
+  return {key, vals: fields.map(f => row[f] ?? null), model: row.modelo || null};
+}
+
+// ---------------------------------------------------------------- direções
+const SETORES = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
+const sector = a => SETORES[Math.floor((((a % 360) + 360) % 360 + 22.5) / 45) % 8];
+// Direção de ORIGEM. Vento/corrente vindos do sul contornam a barreira do Cabo Branco
+// e trazem sedimento: água turva nas praias de João Pessoa.
+const FAVORAVEIS = ['N', 'NE', 'L'], NEUTRAS = ['NO', 'O'], SUL = ['SE', 'S', 'SO'];
+
+// ---------------------------------------------------------------- critérios
+function numericColor(v, limit, margin, strict) {
+  if (!fin(v) || (v < 0 && !strict)) return 'sem-dados';
+  if (strict ? v < limit : v <= limit) return 'verde';
+  return v <= limit * (1 + margin) ? 'amarelo' : 'vermelho';
+}
+function directionColor(sec, speed) {
+  if (speed === 0) return 'verde';
+  if (sec == null || !fin(speed) || speed < 0) return 'sem-dados';
+  if (FAVORAVEIS.includes(sec)) return 'verde';
+  return NEUTRAS.includes(sec) ? 'amarelo' : 'vermelho';
+}
+function cellStyle(key, row, cfg) {
+  const numeric = {mare_m: [cfg.mare_max, true], onda_m: [cfg.onda_max, false], vento_kmh: [cfg.vento_max, false],
+    corrente_kmh: [cfg.corrente_max, false]};
+  if (key in numeric) {
+    const [limit, strict] = numeric[key];
+    return [numericColor(row[key], limit, cfg.margem, strict),
+      `Verde: ${strict ? '<' : '≤'} ${limit}; amarelo: até ${+(limit * (1 + cfg.margem)).toFixed(3)}; vermelho: acima disso.`];
+  }
+  if (key === 'vento_de' || key === 'corrente_de') {
+    const speed = row[key === 'vento_de' ? 'vento_kmh' : 'corrente_kmh'];
+    return [directionColor(row[key], speed),
+      'De onde vem. Verde: N/NE/L ou calmaria; amarelo: NO/O; vermelho: SE/S/SO (água suja do Cabo Branco).'];
+  }
+  if (key === 'vento_sul_24h_pct') {
+    const v = row[key];
+    return [v == null ? 'sem-dados' : v <= 25 ? 'verde' : v <= 50 ? 'amarelo' : 'vermelho',
+      '% das 24 h anteriores com vento de SE/S/SO (≥ 5 km/h). Verde ≤ 25%; amarelo ≤ 50%; vermelho > 50%.'];
+  }
+  return ['', ''];
+}
+
+// [chave, rótulo, papel, peso na nota]
+const CRITERIOS = [
+  ['mare_m', 'maré', 'essencial', 3],
+  ['onda_m', 'ondas', 'essencial', 3],
+  ['vento_kmh', 'vento', 'importante', 2],
+  ['vento_de', 'direção do vento', 'importante', 1],
+  ['vento_sul_24h_pct', 'vento sul nas 24 h anteriores', 'importante', 1.5],
+  ['corrente_kmh', 'corrente', 'secundário', 1],
+  ['corrente_de', 'direção da corrente', 'importante', 1.5],
+];
+const OPCIONAIS = ['corrente_kmh', 'corrente_de'];   // corrente só tem ~10 dias de previsão
+const UNIDADE = {mare_m: ' m', onda_m: ' m', vento_kmh: ' km/h', corrente_kmh: ' km/h'};
+const ORDEM = {EXCELENTE: 0, BOM: 1, REGULAR: 2, INDEFINIDO: 3, RUIM: 4, 'PÉSSIMO': 5};
+const CSS_V = {EXCELENTE: 'exc', BOM: 'bom', REGULAR: 'regular', INDEFINIDO: 'indef', RUIM: 'ruim', 'PÉSSIMO': 'pess'};
+const NOTA_EXCELENTE = 8.5;
+
+function points(key, row, color, cfg) {
+  if (['vento_de', 'corrente_de', 'vento_sul_24h_pct'].includes(key)) return {verde: 1, amarelo: .5, vermelho: 0}[color];
+  const limit = {mare_m: cfg.mare_max, onda_m: cfg.onda_max, vento_kmh: cfg.vento_max, corrente_kmh: cfg.corrente_max}[key];
+  const r = Math.max(row[key], 0) / limit, m = cfg.margem;
+  if (r <= .6) return 1;
+  if (r <= 1) return 1 - .4 * (r - .6) / .4;
+  if (m === 0 || r >= 1 + 2 * m) return 0;
+  return .6 * (1 - (r - 1) / (2 * m));
+}
+
+function verdict(row, cfg) {
+  const colors = Object.fromEntries(CRITERIOS.map(([k]) => [k, cellStyle(k, row, cfg)[0]]));
+  const mainKeys = CRITERIOS.filter(c => c[2] !== 'secundário').map(c => c[0]);
+  const label = Object.fromEntries(CRITERIOS.map(c => [c[0], c[1]]));
+  const issues = [];
+  for (const [k, lab, role] of CRITERIOS) {
+    const c = colors[k];
+    if (c !== 'amarelo' && c !== 'vermelho') continue;
+    let value = `${fin(row[k]) ? row[k].toLocaleString('pt-BR') : row[k]}${UNIDADE[k] || ''}`, text;
+    if (k.endsWith('_de')) text = c === 'vermelho' ? 'vem do sul: água suja' : 'pouco favorável';
+    else if (k === 'vento_sul_24h_pct') { text = c === 'vermelho' ? 'água provavelmente turva' : 'pode turvar'; value = `${row[k]}%`; }
+    else text = c === 'amarelo' ? 'no limite'
+      : points(k, row, c, cfg) === 0 ? 'muito acima do limite' : 'acima do limite';
+    issues.push([c === 'vermelho' && role !== 'secundário' ? 3 : 1, `${lab} ${value} (${text})`]);
+  }
+  issues.sort((a, b) => b[0] - a[0]);
+  let text = issues.map(i => i[1]).join('; ');
+  const reds = mainKeys.filter(k => colors[k] === 'vermelho');
+  const yellows = mainKeys.filter(k => colors[k] === 'amarelo');
+  const missing = mainKeys.filter(k => colors[k] === 'sem-dados' && !OPCIONAIS.includes(k)).map(k => label[k]);
+  const ws = CRITERIOS.filter(([k]) => colors[k] !== 'sem-dados').map(([k, , , w]) => [w, points(k, row, colors[k], cfg)]);
+  const score = Math.round(100 * ws.reduce((s, [w, p]) => s + w * p, 0) / ws.reduce((s, [w]) => s + w, 0)) / 10;
+  // Maré ou ondas tão acima do limite que a nota zera (≥ limite × (1 + 2 × margem)).
+  const farOff = ['mare_m', 'onda_m'].some(k => colors[k] === 'vermelho' && points(k, row, 'vermelho', cfg) === 0);
+  let result;
+  if (reds.length >= 2 || farOff) result = 'PÉSSIMO';
+  else if (reds.length || yellows.length >= 3) { result = 'RUIM'; if (!reds.length) text = 'várias condições no limite: ' + text; }
+  else if (missing.length) { result = 'INDEFINIDO'; text = ['sem previsão de ' + missing.join(', '), text].filter(Boolean).join('; '); }
+  else if (yellows.length || colors.corrente_kmh === 'vermelho') result = 'REGULAR';
+  else if (score >= NOTA_EXCELENTE && colors.corrente_kmh !== 'amarelo') {
+    result = 'EXCELENTE'; text = 'todas as condições com folga abaixo dos limites';
+  } else { result = 'BOM'; text = text || 'todas as condições dentro dos critérios'; }
+  return {result, score, text, colors};
+}
+
+// Divergência entre modelos, descontado o viés médio de cada um (células de grade diferentes).
+function spread(raw, key, field) {
+  const series = [...raw.values()];
+  if (!series.length || !series[0].has(key)) return null;
+  const ref = series[0], vals = [ref.get(key)[field]];
+  for (const other of series.slice(1)) {
+    if (!other.has(key)) continue;
+    const common = [...other.keys()].filter(t => ref.has(t));
+    const bias = common.reduce((s, t) => s + ref.get(t)[field] - other.get(t)[field], 0) / common.length;
+    vals.push(other.get(key)[field] + bias);
+  }
+  return vals.length > 1 ? Math.max(...vals) - Math.min(...vals) : null;
+}
+
+function confidence(ms, today, colors, spreads) {
+  const lead = Math.round((parseLocal(localDay(ms)) - parseLocal(today)) / 864e5);
+  let level = lead <= 2 ? 3 : lead <= 6 ? 2 : 1;
+  const notes = [`${lead} dia(s) de antecedência`];
+  for (const [lab, s, tol, unit] of spreads)
+    if (s != null && s > tol) { level--; notes.push(`modelos divergem em ${lab} (${s.toFixed(1)}${unit})`); }
+  if (colors.corrente_kmh === 'sem-dados' || colors.corrente_de === 'sem-dados') { level--; notes.push('sem previsão de corrente'); }
+  return [{3: 'Alta', 2: 'Média', 1: 'Baixa'}[Math.max(level, 1)], notes.join('; ')];
+}
+
+// % das 24 h anteriores com vento de SE/S/SO acima de uma brisa mínima.
+function southShare(series, key, hours = 24, minimum = 5) {
+  const base = parseLocal(key);
+  const win = [];
+  for (let h = 1; h <= hours; h++) { const w = series.get(hourKey(base - h * 3600e3)); if (w) win.push(w); }
+  if (win.length < hours * .75) return null;
+  const south = win.filter(w => w.wind_speed_10m >= minimum && SUL.includes(sector(w.wind_direction_10m))).length;
+  return Math.round(100 * south / win.length);
+}
+
+// ---------------------------------------------------------------- Lua
+const FASES = ['Nova', 'Crescente', 'Quarto crescente', 'Gibosa crescente', 'Cheia', 'Gibosa minguante', 'Quarto minguante', 'Minguante'];
+function moon(ms) {
+  const date = new Date(ms);
+  let angle, illum;
+  if (window.Astronomy) {
+    angle = Astronomy.MoonPhase(date);
+    illum = Astronomy.Illumination(Astronomy.Body.Moon, date).phase_fraction * 100;
+  } else {  // aproximação pelo mês sinódico médio (erro de algumas horas na fase)
+    const age = ((ms - Date.UTC(2000, 0, 6, 18, 14)) / 864e5) % 29.530588853;
+    angle = 360 * age / 29.530588853;
+    illum = 50 * (1 - Math.cos(angle * Math.PI / 180));
+  }
+  return [FASES[Math.round(angle / 45) % 8], Math.round(illum * 10) / 10];
+}
+
+// ---------------------------------------------------------------- execução
+const PERIODO = {dia: '☀', noite: '☾', madrugada: '☾'};
+const DEFAULTS = {dias: 15, mare_max: 0.4, onda_max: 1.0, vento_max: 15, corrente_max: 0.5, margem: 20,
+  hora_inicio: 6, hora_fim: 17, lat: -7.10, lon: -34.80};
+const form = document.getElementById('form');
+let lastRows = [];
+
+function readConfig() {
+  const f = Object.fromEntries(new FormData(form));
+  const cfg = {inicio: f.inicio};
+  for (const k of Object.keys(DEFAULTS)) cfg[k] = Number(f[k]);
+  const bad = [];
+  if (!/^\d{4}-\d\d-\d\d$/.test(cfg.inicio)) bad.push('data de início');
+  if (!Number.isInteger(cfg.dias) || cfg.dias < 0 || cfg.dias > 15) bad.push('dias (0–15)');
+  for (const k of ['mare_max', 'onda_max', 'vento_max', 'corrente_max']) if (!(cfg[k] > 0)) bad.push(k);
+  if (!(cfg.margem >= 0)) bad.push('margem');
+  if (!(0 <= cfg.hora_inicio && cfg.hora_inicio < cfg.hora_fim && cfg.hora_fim <= 24)) bad.push('horas do dia');
+  if (!(Math.abs(cfg.lat) <= 90 && Math.abs(cfg.lon) <= 180)) bad.push('coordenadas');
+  if (bad.length) throw new Error('Verifique: ' + bad.join(', ') + '.');
+  return cfg;
+}
+
+async function run() {
+  const status = document.getElementById('status'), btn = document.getElementById('consultar');
+  const avisos = [];
+  status.className = ''; status.textContent = 'Consultando modelos…'; btn.disabled = true;
+  try {
+    const cfg = readConfig();
+    store.set('config', cfg);
+    cfg.margem = cfg.margem / 100;
+    const start = cfg.inicio, end = addDays(start, cfg.dias);
+    const now = Date.now(), today = localDay(now);
+    const tides = tideTables();
+    for (let y = +start.slice(0, 4); y <= +end.slice(0, 4); y++)
+      if (!tides.some(t => localDay(t.ms).startsWith(String(y))))
+        avisos.push(`Sem tábua de marés para ${y}: os dias de ${y} ficam de fora. Atualize com: python atualizar_mares.py TABUA_CABEDELO_${y}.pdf`);
+    const lows = tides.filter(t => { const d = localDay(t.ms); return d >= start && d <= end && t.ms >= now - 3600e3; });
+    if (!lows.length) throw new Error('Nenhuma baixa-mar futura no período (ou falta a tábua do ano).');
+
+    // Véspera: persistência do vento sul. Dia seguinte: baixas perto da meia-noite.
+    const horizon = [addDays(today, 15), end].sort().at(-1);
+    const fetchEnd = [addDays(end, 1), horizon].sort()[0];
+    const errors = [], series = {}, raw = {}, metas = {};
+    await Promise.all(FONTES.map(async src => {
+      const r = await forecast(src, cfg.lat, cfg.lon, addDays(start, -1), fetchEnd, errors);
+      series[src.nome] = r.merged; raw[src.nome] = r.raw; metas[src.nome] = r.metas;
+    }));
+    avisos.push(...errors.map(e => 'Falha na consulta: ' + e));
+
+    const rows = lows.map(({ms, h}) => {
+      const clock = +hm(ms).slice(0, 2) + +hm(ms).slice(3) / 60;
+      const periodo = clock >= cfg.hora_inicio && clock < cfg.hora_fim ? 'dia' : clock >= cfg.hora_fim ? 'noite' : 'madrugada';
+      const w = sample(series.vento, ms, FONTES[0].fields);
+      const o = sample(series.ondas, ms, FONTES[1].fields);
+      const c = sample(series.corrente, ms, FONTES[2].fields);
+      const [lua, ilum] = moon(ms);
+      const day = localDay(ms);
+      const row = {data: ddmmyyyy(day), dia: weekday(day), periodo, baixa_mar: hm(ms), veredicto: null, nota: null,
+        confianca: null, motivo: null, mare_m: h, onda_m: o.vals[0], onda_periodo_s: o.vals[1],
+        onda_de: o.vals[2] != null ? sector(o.vals[2]) : null,
+        vento_kmh: w.vals[0], vento_de: w.vals[1] != null ? sector(w.vals[1]) : null,
+        vento_sul_24h_pct: southShare(series.vento, w.key),
+        corrente_kmh: c.vals[0], corrente_de: c.vals[1] != null ? sector(c.vals[1] + 180) : null,  // API: para onde vai
+        lua, iluminacao_pct: ilum, hora_modelo: w.key.slice(11, 16),
+        modelos: [w.model, o.model, c.model].map(m => m || '—').join(' / '), obs_confianca: null};
+      const v = verdict(row, cfg);
+      Object.assign(row, {veredicto: v.result, nota: v.score, motivo: v.text});
+      [row.confianca, row.obs_confianca] = confidence(ms, today, v.colors, [
+        ['vento', spread(raw.vento, w.key, 'wind_speed_10m'), 5, ' km/h'],
+        ['ondas', spread(raw.ondas, w.key, 'wave_height'), .25, ' m']]);
+      row._day = day;
+      return row;
+    });
+    lastRows = rows;
+    render(rows, cfg, start, end, {consulta: new Date(now).toISOString(), periodo: {inicio: start, fim: end},
+      configuracao: cfg, erros: errors, fontes: metas});
+    status.textContent = `Pronto: ${rows.length} baixa-mares avaliadas.`;
+  } catch (e) {
+    status.className = 'erro'; status.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('avisos').innerHTML = avisos.map(a => `<div>${esc(a)}</div>`).join('');
+  }
+}
+
+// ---------------------------------------------------------------- renderização
+function render(rows, cfg, start, end, meta) {
+  document.getElementById('resultado').hidden = false;
+  document.getElementById('titulo').textContent = `João Pessoa — ${ddmm(start)} a ${ddmmyyyy(end)}`;
+  document.getElementById('consulta').textContent =
+    `Consulta: ${localISO(Date.parse(meta.consulta)).slice(0, 16).replace('T', ' ')} (horário de Recife)`;
+
+  const tag = v => `<span class="tag ${CSS_V[v]}">${esc(v)}</span>`;
+  const ranking = sel => {
+    const best = sel.filter(r => ORDEM[r.veredicto] <= ORDEM.REGULAR)
+      .sort((a, b) => ORDEM[a.veredicto] - ORDEM[b.veredicto] || b.nota - a.nota).slice(0, 3);
+    if (!best.length) return '<p class="muted">Nenhuma janela EXCELENTE, BOM ou REGULAR.</p>';
+    return '<ol class="top">' + best.map(r => `<li><b>${esc(r.dia)} ${esc(r.data.slice(0, 5))} às ${esc(r.baixa_mar)}</b>
+      (${num(r.mare_m)} m) ${tag(r.veredicto)} nota ${num(r.nota, 1)} · confiança ${esc(r.confianca)}
+      ${r.periodo !== 'dia' ? ` · lua ${Math.round(r.iluminacao_pct)}%` : ''} — ${esc(r.motivo)}</li>`).join('') + '</ol>';
+  };
+  document.getElementById('tops').innerHTML =
+    `<h3>☀ De dia</h3>${ranking(rows.filter(r => r.periodo === 'dia'))}` +
+    `<h3>☾ À noite (lanterna)</h3>${ranking(rows.filter(r => r.periodo !== 'dia'))}`;
+
+  const days = groupByDay(rows);
+  lastDays = days;
+  document.getElementById('cards').innerHTML = days.map(g => {
+    const best = g.slots.map(r => r.veredicto).sort((a, b) => ORDEM[a] - ORDEM[b])[0];
+    return `<div class="card ${CSS_V[best]}"><div class="d">${esc(weekday(g.day))} <b>${esc(ddmm(g.day))}</b></div>` +
+      g.slots.map(r => `<div class="slot" title="${esc(r.motivo)}" tabindex="0">
+        <span class="lw">${PERIODO[r.periodo]} ${esc(when(r, g.day))} · ${num(r.mare_m)} m</span>
+        ${tag(r.veredicto)} <span class="sm">${num(r.nota, 1)} · ${esc(r.confianca)}</span>
+        <span class="why">${esc(r.motivo)}</span></div>`).join('') + '</div>';
+  }).join('');
+
+  // Tabela: a data numa célula larga à esquerda; ao lado, uma linha fina por baixa-mar.
+  const head = `<th>data</th>${COLUNAS.map(([, h]) => `<th>${esc(h)}</th>`).join('')}`;
+  const body = days.map(g => '<tbody class="dia">' + g.slots.map((r, i) => '<tr>' +
+    (i ? '' : `<td class="data" rowspan="${g.slots.length}">${esc(weekday(g.day))}<b>${esc(ddmm(g.day))}</b></td>`) +
+    COLUNAS.map(([k]) => {
+      let css, expl, shown;
+      if (k === 'periodo') { css = 'per'; expl = r.periodo; shown = PERIODO[r.periodo]; }
+      else if (k === 'baixa_mar') { css = 'hora'; expl = ''; shown = when(r, g.day); }
+      else {
+        if (k === 'veredicto') { css = 'ver v-' + CSS_V[r[k]]; expl = r.motivo; }
+        else [css, expl] = cellStyle(k, r, cfg);
+        const v = r[k];
+        shown = v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pt-BR') : v;
+      }
+      return `<td class="${esc(css)}" title="${esc(expl)}">${esc(shown)}</td>`;
+    }).join('') + '</tr>').join('') + '</tbody>').join('');
+  document.getElementById('tabela').innerHTML = `<thead><tr>${head}</tr></thead>${body}`;
+
+  document.getElementById('regras').innerHTML = `
+    <p>Um veredicto para cada baixa-mar: de dia (${cfg.hora_inicio}h–${cfg.hora_fim}h), à noite e de madrugada
+    (mergulho com lanterna). Baixa-mares que já passaram são omitidas.</p>
+    <p><b>Essenciais:</b> maré e ondas. <b>Importantes:</b> vento, direção do vento, vento sul nas 24 h anteriores
+    e direção da corrente. <b>Secundário:</b> velocidade da corrente.</p>
+    <p>Vento e corrente vindos de <b>SE/S/SO</b> contornam a barreira do Cabo Branco e sujam a água: vermelho.
+    NO/O: amarelo. N/NE/L: verde. Direções sempre de onde vem (a corrente da API é convertida em +180°).
+    Vento sul nas 24 h anteriores: verde ≤ 25% das horas, amarelo ≤ 50%, vermelho acima — a água continua turva depois que o vento muda.</p>
+    <p>Cinco veredictos, do melhor para o pior:</p>
+    <ul>
+      <li><b>EXCELENTE</b>: tudo verde, inclusive a velocidade da corrente, e nota ≥ ${NOTA_EXCELENTE.toLocaleString('pt-BR')} (folga abaixo dos limites).</li>
+      <li><b>BOM</b>: essenciais e importantes verdes, sem a folga do excelente.</li>
+      <li><b>REGULAR</b>: um ou dois essenciais/importantes no limite (amarelo), ou velocidade da corrente vermelha.</li>
+      <li><b>RUIM</b>: um essencial/importante vermelho, ou três ou mais no limite.</li>
+      <li><b>PÉSSIMO</b>: dois ou mais vermelhos, ou maré/ondas muito acima do limite
+        (≥ limite + 2× a margem amarela; maré ≥ ${+(cfg.mare_max * (1 + 2 * cfg.margem)).toFixed(2)} m).</li>
+    </ul>
+    <p><b>INDEFINIDO</b>: falta previsão de ondas ou vento. Corrente sem previsão (após ~10 dias) não reprova; só reduz a confiança.</p>
+    <p><b>Nota 0–10</b> (pesos: maré 3, ondas 3, vento 2, direção do vento 1, vento sul 24 h 1,5, direção da corrente 1,5,
+    corrente 1) premia folga abaixo do limite e ordena janelas com o mesmo veredicto.
+    <b>Confiança</b>: Alta até 2 dias, Média até 6, Baixa depois; cai um nível se os modelos divergirem na tendência
+    (descontado o viés médio: &gt; 5 km/h de vento ou &gt; 0,25 m de onda) ou se faltar corrente.</p>
+    <p class="sm">Limites: maré &lt; ${cfg.mare_max} m (nível de redução DHN); ondas ≤ ${cfg.onda_max} m; vento ≤ ${cfg.vento_max} km/h;
+    corrente ≤ ${cfg.corrente_max} km/h; amarelo até ${Math.round(cfg.margem * 100)}% acima. Modelos: vento ECMWF IFS 9 km → GFS;
+    ondas ECMWF WAM 9 km → Météo-France MFWAM → NCEP GFS-Wave; corrente Météo-France SMOC 8 km (~10 dias).
+    Valores da hora mais próxima da baixa-mar. Ondas são de mar aberto; a barreira de recifes atenua dentro das piscinas.
+    Correntes de modelo não resolvem canais de recife nem correntes de retorno. Triagem pelos critérios escolhidos,
+    não garantia de segurança ou visibilidade.</p>`;
+  document.getElementById('meta').textContent = JSON.stringify(meta, null, 2);
+}
+
+// Agrupa as baixa-mares por data. Baixa de madrugada conta como a noite do dia anterior
+// (mergulho noturno que atravessa a meia-noite).
+function groupByDay(rows) {
+  const days = new Map();
+  for (const r of rows) {
+    const anchor = r.periodo === 'madrugada' ? addDays(r._day, -1) : r._day;
+    if (!days.has(anchor)) days.set(anchor, {day: anchor, slots: []});
+    days.get(anchor).slots.push(r);
+  }
+  return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+// Horário com a data quando a baixa cai no dia seguinte (madrugada).
+const when = (r, day) => (r._day === day ? r.baixa_mar : `${r.baixa_mar} (${ddmm(r._day)})`);
+
+// Colunas das linhas de horário (tabela e CSV); motivo, modelos e obs_confianca ficam fora.
+const COLUNAS = [['periodo', ''], ['baixa_mar', 'baixa'], ['veredicto', 'veredicto'], ['nota', 'nota'],
+  ['confianca', 'confiança'], ['mare_m', 'maré m'], ['onda_m', 'ondas m'], ['onda_periodo_s', 'período s'],
+  ['onda_de', 'ondas de'], ['vento_kmh', 'vento km/h'], ['vento_de', 'vento de'], ['vento_sul_24h_pct', 'sul 24 h %'],
+  ['corrente_kmh', 'corrente km/h'], ['corrente_de', 'corrente de'], ['lua', 'lua'], ['iluminacao_pct', 'ilum. %']];
+let lastDays = [];
+
+function downloadCSV() {
+  if (!lastDays.length) return;
+  const cell = v => { const s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const header = ['data', 'dia', 'data_baixa_mar', ...COLUNAS.map(([k]) => k)];
+  const lines = lastDays.flatMap(g => g.slots.map(r =>
+    [ddmmyyyy(g.day), weekday(g.day), r.data, ...COLUNAS.map(([k]) => r[k])].map(cell).join(';')));
+  const text = '﻿' + [header.join(';'), ...lines].join('\r\n');
+  const a = Object.assign(document.createElement('a'),
+    {href: URL.createObjectURL(new Blob([text], {type: 'text/csv;charset=utf-8'})), download: 'mergulho.csv'});
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------------------------------------------------------------- inicialização
+function fillForm(cfg) {
+  for (const [k, v] of Object.entries(cfg)) if (form.elements[k]) form.elements[k].value = v;
+}
+function today() { return localDay(Date.now()); }
+fillForm({...DEFAULTS, ...(store.get('config') || {}), inicio: today()});
+form.addEventListener('submit', e => { e.preventDefault(); run(); });
+document.getElementById('padrao').addEventListener('click', () => { store.del('config'); fillForm({...DEFAULTS, inicio: today()}); });
+document.getElementById('csv').addEventListener('click', downloadCSV);
+document.getElementById('cards').addEventListener('click', e => e.target.closest('.slot')?.classList.toggle('open'));
+document.getElementById('cards').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.target.closest('.slot')?.classList.toggle('open'); }
+});
+run();
+</script>
+</body>
+</html>
