@@ -979,7 +979,8 @@ function select(i, cfg = lastCfg, scroll = true) {
   const speed = (v, d, dir) => (fin(v) ? `${num(v, d)} km/h` : 'sem previsão');
   const anchor = r._day;
   const det = document.getElementById('detalhe');
-  det.className = `det v-${CSS_V[r.veredicto]}`;
+  const aberto = det.classList.contains('open'), topo = det.scrollTop;
+  det.className = `det v-${CSS_V[r.veredicto]}${aberto ? ' open' : ''}`;
   det.innerHTML = `<button type="button" class="fechar" aria-label="Fechar">×</button><div>
       <p class="when">${esc(DIA_LONGO(r._day))}</p>
       <p class="big">${esc(diaMes(r._day))}</p>
@@ -1006,7 +1007,7 @@ function select(i, cfg = lastCfg, scroll = true) {
       ${item('Lua', `${Math.round(r.iluminacao_pct)}%`, '', esc(r.lua.toLowerCase()))}
     </dl>
     ${mapa(r, c)}`;
-  if (!scroll) return;
+  if (!scroll) { det.scrollTop = topo; return; }
   if (MOBILE.matches) {   // no celular o detalhe sobe como um painel
     det.classList.add('open'); document.getElementById('veu').classList.add('open');
     document.documentElement.classList.add('travado');
