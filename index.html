@@ -93,6 +93,12 @@ h2{margin:0;font:600 22px/1.2 Fraunces,Georgia,serif}
 .empty{color:var(--muted);font-size:14px;padding:12px 0;margin:0}
 .vtxt{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .vtxt::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--c,var(--indef))}
+.vtxt small{font-size:inherit;font-weight:500;letter-spacing:0;text-transform:none;opacity:.75}
+.mv{display:flex;flex-direction:column;gap:3px}.mv .vtxt{font-size:11px}.mv .vtxt::before{width:8px;height:8px}
+.eixos{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px!important}
+.hero .eixos .vtxt::before{box-shadow:0 0 0 1.5px rgba(255,255,255,.85)}
+.det .grp{grid-column:1/-1;padding-top:6px;border-top:1px solid var(--rule)}
+.det .grp:first-child{border-top:0;padding-top:0}.det .grp:empty{padding:0}
 
 /* calendário */
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
@@ -410,6 +416,13 @@ function rainBefore(series, key, hours = 48) {
   for (let h = 1; h <= hours; h++) { const v = series.get(hourKey(base - h * 3600e3))?.precipitation; if (fin(v)) { sum += v; n++; } }
   return n >= hours * .75 ? Math.round(sum * 10) / 10 : null;
 }
+// Altura média das ondas nas `hours` horas até a baixa-mar (m): onda persistente revolve a areia do fundo.
+function waveBefore(series, key, hours = 72) {
+  const base = parseLocal(key);
+  let sum = 0, n = 0;
+  for (let h = 0; h < hours; h++) { const v = series.get(hourKey(base - h * 3600e3))?.wave_height; if (fin(v)) { sum += v; n++; } }
+  return n >= hours * .75 ? Math.round(100 * sum / n) / 100 : null;
+}
 
 // ---------------------------------------------------------------- direções
 const SETORES = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
@@ -450,15 +463,21 @@ function cellStyle(key, row, cfg) {
       'ou de O/NO; verde: N, NE, L e o alísio de ESE até 120°, ou calmaria' +
       (vento ? '.' : `; corrente abaixo de ${num(CORRENTE_MIN_DIR, 1)} km/h não tem direção confiável.`)];
   }
-  if (key === 'chuva_48h_mm') {
+  if (key === 'onda_5d_m') {
     const v = row[key];
-    return [v == null ? 'sem-dados' : v <= CHUVA.verde ? 'verde' : v <= CHUVA.amarelo ? 'amarelo' : 'vermelho',
-      `Chuva nas 48 h anteriores: escoamento turva a água. Verde ≤ ${CHUVA.verde} mm; amarelo ≤ ${CHUVA.amarelo} mm; vermelho acima.`];
+    return [v == null ? 'sem-dados' : v <= VIS.onda ? 'verde' : 'amarelo',
+      `Média das ondas nos 5 dias anteriores: mar mexido por dias revolve a areia. Verde ≤ ${num(VIS.onda, 2)} m; amarelo acima.`];
   }
-  if (key === 'vento_sul_24h_pct') {
+  if (key === 'sul_7d_pct') {
     const v = row[key];
-    return [v == null ? 'sem-dados' : v <= 25 ? 'verde' : v <= 50 ? 'amarelo' : 'vermelho',
-      '% das 24 h anteriores com vento de SE/S/SO (≥ 5 km/h). Verde ≤ 25%; amarelo ≤ 50%; vermelho > 50%.'];
+    return [v == null ? 'sem-dados' : v <= VIS.sul7 ? 'verde' : 'amarelo',
+      `% das horas dos 7 dias anteriores com vento de SE/S/SO (≥ 5 km/h). Verde ≤ ${VIS.sul7}%; amarelo acima.`];
+  }
+  if (key === 'sul_30d_pct') {
+    const v = row[key];
+    return [v == null ? 'sem-dados' : v <= VIS.sul30 ? 'verde' : 'vermelho',
+      `% das horas dos 30 dias anteriores com vento de SE/S/SO (≥ 5 km/h): semanas de vento sul trazem sedimento ` +
+      `do Cabo Branco e dos rios. Verde ≤ ${VIS.sul30}%; vermelho acima.`];
   }
   return ['', ''];
 }
@@ -467,24 +486,29 @@ function cellStyle(key, row, cfg) {
 const CRITERIOS = [
   ['mare_m', 'maré', 'essencial', 3],
   ['onda_m', 'ondas', 'essencial', 3],
-  ['vento_kmh', 'vento', 'importante', 2],
-  ['vento_de', 'direção do vento', 'importante', 1],
-  ['vento_sul_24h_pct', 'vento sul nas 24 h anteriores', 'importante', 1.5],
-  ['chuva_48h_mm', 'chuva nas 48 h anteriores', 'importante', 1.5],
+  // Força do vento: sem efeito na turbidez (satélite) e o alísio de leste não traz sujeira → só secundário.
+  ['vento_kmh', 'vento', 'secundário', 1],
+  // Visibilidade, calibrada com 280 dias de turbidez por satélite (Kd490, jan–nov/2026): ondas dos 5 dias e vento
+  // sul persistente. Direção do vento na hora, chuva e direção da corrente não melhoraram a previsão → só informativos.
+  ['onda_5d_m', 'ondas nos 5 dias anteriores', 'importante', 1.5],
+  ['sul_7d_pct', 'vento sul nos 7 dias anteriores', 'importante', 1],
+  ['sul_30d_pct', 'vento sul nos 30 dias anteriores', 'importante', 1.5],
   // Corrente: dado grosseiro (célula a ~5 km, degraus de 0,2 km/h, só N/S/L/O) → só secundário.
   ['corrente_kmh', 'corrente', 'secundário', 1],
-  ['corrente_de', 'direção da corrente', 'secundário', 1],
 ];
-const CHUVA = {verde: 10, amarelo: 25};   // mm nas 48 h anteriores
-// Sem estes dados o veredicto sai mesmo assim (só cai a confiança): corrente cobre ~10 dias.
-const OPCIONAIS = ['corrente_kmh', 'corrente_de', 'chuva_48h_mm'];
-const UNIDADE = {mare_m: ' m', onda_m: ' m', vento_kmh: ' km/h', corrente_kmh: ' km/h', chuva_48h_mm: ' mm'};
+// Boa: ondas dos 5 dias ≤ 0,65 m e vento sul ≤ 70% das horas em 7 dias. Ruim: vento sul > 80% das horas em 30 dias.
+// Em 280 dias: nenhum dia turvo como boa, nenhum limpo ou médio como ruim; acerto da classe ~80%.
+const VIS = {onda: 0.65, sul7: 70, sul30: 80};
+const UNIDADE = {mare_m: ' m', onda_m: ' m', onda_5d_m: ' m', vento_kmh: ' km/h', corrente_kmh: ' km/h', sul_7d_pct: '%', sul_30d_pct: '%'};
 const ORDEM = {EXCELENTE: 0, BOM: 1, REGULAR: 2, INDEFINIDO: 3, RUIM: 4, 'PÉSSIMO': 5};
 const CSS_V = {EXCELENTE: 'exc', BOM: 'bom', REGULAR: 'regular', INDEFINIDO: 'indef', RUIM: 'ruim', 'PÉSSIMO': 'pess'};
-const NOTA_EXCELENTE = 8.5, FOLGA_EXCELENTE = 0.8;
+const FOLGA_EXCELENTE = 0.8;
+// Faixas de nota de cada veredicto: a nota define o nível e as regras só podem rebaixá-lo; depois a nota é
+// limitada à faixa do veredicto final, para os dois nunca se contradizerem.
+const FAIXA = {EXCELENTE: [9, 10], BOM: [7, 8.9], REGULAR: [5, 6.9], RUIM: [3, 4.9], 'PÉSSIMO': [0, 2.9]};
 
 function points(key, row, color, cfg) {
-  if (['vento_de', 'corrente_de', 'vento_sul_24h_pct', 'chuva_48h_mm'].includes(key)) return {verde: 1, amarelo: .5, vermelho: 0}[color];
+  if (['onda_5d_m', 'sul_7d_pct', 'sul_30d_pct'].includes(key)) return {verde: 1, amarelo: .5, vermelho: 0}[color];
   const limit = {mare_m: cfg.mare_max, onda_m: cfg.onda_max, vento_kmh: cfg.vento_max, corrente_kmh: cfg.corrente_max}[key];
   const r = Math.max(row[key], 0) / limit, m = cfg.margem;
   if (r <= .6) return 1;
@@ -493,44 +517,74 @@ function points(key, row, color, cfg) {
   return .6 * (1 - (r - 1) / (2 * m));
 }
 
+// Dois eixos avaliados em separado e depois combinados:
+//  Mar — dá para mergulhar com conforto e segurança? (maré, ondas e vento na hora, corrente);
+//  Visibilidade — a água deve estar limpa? (ondas dos 5 dias, vento sul em 7 e em 30 dias).
+const GRUPO_MAR = ['mare_m', 'onda_m', 'vento_kmh', 'corrente_kmh'];
+const GRUPO_VIS = ['onda_5d_m', 'sul_7d_pct', 'sul_30d_pct'];
+const NOME_VIS = {BOA: 'Boa', 'MÉDIA': 'Média', RUIM: 'Ruim', INDEFINIDA: 'Indefinida'};
+const CSS_VIS = {BOA: 'bom', 'MÉDIA': 'regular', RUIM: 'ruim', INDEFINIDA: 'indef'};
+
 function verdict(row, cfg) {
   const colors = Object.fromEntries(CRITERIOS.map(([k]) => [k, cellStyle(k, row, cfg)[0]]));
-  const mainKeys = CRITERIOS.filter(c => c[2] !== 'secundário').map(c => c[0]);
   const label = Object.fromEntries(CRITERIOS.map(c => [c[0], c[1]]));
+  const role = Object.fromEntries(CRITERIOS.map(c => [c[0], c[2]]));
   const issues = [];
-  for (const [k, lab, role] of CRITERIOS) {
+  for (const [k, lab, papel] of CRITERIOS) {
     const c = colors[k];
     if (c !== 'amarelo' && c !== 'vermelho') continue;
     let value = `${fin(row[k]) ? row[k].toLocaleString('pt-BR') : row[k]}${UNIDADE[k] || ''}`, text;
     if (k.endsWith('_de')) text = c === 'vermelho' ? 'vem do sul: água suja' : 'pouco favorável';
-    else if (k === 'vento_sul_24h_pct') { text = c === 'vermelho' ? 'água provavelmente turva' : 'pode turvar'; value = `${row[k]}%`; }
-    else if (k === 'chuva_48h_mm') text = c === 'vermelho' ? 'água provavelmente turva' : 'pode turvar';
+    else if (k === 'sul_30d_pct') text = 'semanas de vento sul: água turva';
+    else if (k === 'sul_7d_pct' || k === 'onda_5d_m') text = 'pode turvar';
     else text = c === 'amarelo' ? 'no limite'
       : points(k, row, c, cfg) === 0 ? 'muito acima do limite' : 'acima do limite';
-    issues.push([c === 'vermelho' && role !== 'secundário' ? 3 : 1, `${lab} ${value} (${text})`]);
+    issues.push([c === 'vermelho' && papel !== 'secundário' ? 3 : 1, `${lab} ${value} (${text})`]);
   }
   issues.sort((a, b) => b[0] - a[0]);
   let text = issues.map(i => i[1]).join('; ');
-  const reds = mainKeys.filter(k => colors[k] === 'vermelho');
-  const yellows = mainKeys.filter(k => colors[k] === 'amarelo');
-  const missing = mainKeys.filter(k => colors[k] === 'sem-dados' && !OPCIONAIS.includes(k)).map(k => label[k]);
+  const pick = (keys, cor, principal) => keys.filter(k => (role[k] !== 'secundário') === principal && colors[k] === cor);
+  const semDados = keys => keys.filter(k => role[k] !== 'secundário' && colors[k] === 'sem-dados').map(k => label[k]);
   const ws = CRITERIOS.filter(([k]) => colors[k] !== 'sem-dados').map(([k, , , w]) => [w, points(k, row, colors[k], cfg)]);
   const score = Math.round(100 * ws.reduce((s, [w, p]) => s + w * p, 0) / ws.reduce((s, [w]) => s + w, 0)) / 10;
-  // Maré ou ondas tão acima do limite que a nota zera (≥ limite × (1 + 2 × margem)).
+
+  // Mar. Maré ou ondas tão acima do limite que a nota zera (≥ limite × (1 + 2 × margem)) já é péssimo.
+  const mReds = pick(GRUPO_MAR, 'vermelho', true), mYel = pick(GRUPO_MAR, 'amarelo', true);
   const farOff = ['mare_m', 'onda_m'].some(k => colors[k] === 'vermelho' && points(k, row, 'vermelho', cfg) === 0);
-  // Excelente exige folga real nos três decisivos (até 80% do limite), não só nota alta: critérios
-  // sim/não (direção, chuva, vento sul) dão pontos cheios e inflariam a nota.
-  const limite = {mare_m: cfg.mare_max, onda_m: cfg.onda_max, vento_kmh: cfg.vento_max};
+  // Excelente exige folga real nos dois decisivos (até 80% do limite).
+  const limite = {mare_m: cfg.mare_max, onda_m: cfg.onda_max};
   const folga = Object.entries(limite).every(([k, l]) => fin(row[k]) && row[k] <= FOLGA_EXCELENTE * l);
-  let result;
-  if (reds.length >= 2 || farOff) result = 'PÉSSIMO';
-  else if (reds.length || yellows.length >= 3) { result = 'RUIM'; if (!reds.length) text = 'várias condições no limite: ' + text; }
-  else if (missing.length) { result = 'INDEFINIDO'; text = ['sem previsão de ' + missing.join(', '), text].filter(Boolean).join('; '); }
-  else if (yellows.length || colors.corrente_kmh === 'vermelho' || colors.corrente_de === 'vermelho') result = 'REGULAR';
-  else if (score >= NOTA_EXCELENTE && folga && colors.corrente_kmh !== 'amarelo' && colors.corrente_de !== 'amarelo') {
-    result = 'EXCELENTE'; text = 'todas as condições com folga abaixo dos limites';
-  } else { result = 'BOM'; text = text || 'todas as condições dentro dos critérios'; }
-  return {result, score, text, colors};
+  const mFalta = semDados(GRUPO_MAR);
+  let mar;
+  if (mReds.length >= 2 || farOff) mar = 'PÉSSIMO';
+  else if (mReds.length) mar = 'RUIM';
+  else if (mFalta.length) mar = 'INDEFINIDO';
+  else if (mYel.length || pick(GRUPO_MAR, 'vermelho', false).length) mar = 'REGULAR';
+  else if (folga) mar = 'EXCELENTE';
+  else mar = 'BOM';
+
+  // Visibilidade: ruim com semanas de vento sul; média com mar mexido ou vento sul na última semana; boa no resto.
+  const vFalta = semDados(GRUPO_VIS);
+  let vis;
+  if (colors.sul_30d_pct === 'vermelho') vis = 'RUIM';
+  else if (vFalta.length) vis = 'INDEFINIDA';
+  else if (GRUPO_VIS.some(k => colors[k] === 'amarelo')) vis = 'MÉDIA';
+  else vis = 'BOA';
+
+  // Geral: a nota define o nível; as regras impõem um teto (o pior dos dois eixos, péssimo se ambos ruins).
+  if (mar === 'INDEFINIDO' || vis === 'INDEFINIDA')
+    return {result: 'INDEFINIDO', mar, vis, score, colors,
+      text: ['sem previsão de ' + [...mFalta, ...vFalta].join(', '), text].filter(Boolean).join('; ')};
+  const teto = mar === 'PÉSSIMO' || (mar === 'RUIM' && vis === 'RUIM') ? 'PÉSSIMO'
+    : mar === 'RUIM' || vis === 'RUIM' ? 'RUIM'
+    : mar === 'REGULAR' || vis === 'MÉDIA' ? 'REGULAR'
+    : mar === 'BOM' ? 'BOM' : 'EXCELENTE';
+  const pelaNota = Object.keys(FAIXA).find(v => score >= FAIXA[v][0]);
+  const result = ORDEM[teto] > ORDEM[pelaNota] ? teto : pelaNota;
+  const nota = Math.min(score, FAIXA[result][1]);
+  if (!text) text = result === 'EXCELENTE' ? 'todas as condições com folga abaixo dos limites'
+    : teto === 'BOM' && pelaNota === 'EXCELENTE' ? 'maré ou ondas perto do limite' : 'todas as condições dentro dos critérios';
+  return {result, mar, vis, score: nota, text, colors};
 }
 
 // Divergência entre modelos, descontado o viés médio de cada um (células de grade diferentes).
@@ -628,12 +682,12 @@ async function run() {
     const lows = tides.filter(t => { const d = localDay(t.ms); return d >= start && d <= end && t.ms >= now - 3600e3; });
     if (!lows.length) throw new Error('Nenhuma baixa-mar futura no período (ou falta a tábua do ano).');
 
-    // Dois dias antes: chuva acumulada e persistência do vento sul. Dia seguinte: baixas perto da meia-noite.
+    // 31 dias antes: vento sul dos 30 dias anteriores (e ondas dos 5 dias). Dia seguinte: baixas perto da meia-noite.
     const horizon = [addDays(today, 15), end].sort().at(-1);
     const fetchEnd = [addDays(end, 1), horizon].sort()[0];
     const errors = [], series = {}, raw = {}, metas = {};
     await Promise.all(FONTES.map(async src => {
-      const r = await forecast(src, cfg.lat, cfg.lon, addDays(start, -2), fetchEnd, errors);
+      const r = await forecast(src, cfg.lat, cfg.lon, addDays(start, -31), fetchEnd, errors);
       series[src.nome] = r.merged; raw[src.nome] = r.raw; metas[src.nome] = r.metas;
     }));
     avisos.push(...errors.map(e => 'Falha na consulta: ' + e));
@@ -646,11 +700,12 @@ async function run() {
       const c = sample(series.corrente, ms, FONTES[2].fields);
       const [lua, ilum] = moon(ms);
       const day = localDay(ms);
-      const row = {data: ddmmyyyy(day), dia: weekday(day), periodo, baixa_mar: hm(ms), veredicto: null, nota: null,
-        confianca: null, motivo: null, mare_m: h, onda_m: worstInWindow(series.ondas, ms, 'wave_height'), onda_periodo_s: o.vals[1],
+      const row = {data: ddmmyyyy(day), dia: weekday(day), periodo, baixa_mar: hm(ms), veredicto: null, mar: null, visibilidade: null, nota: null,
+        confianca: null, motivo: null, mare_m: h, onda_m: worstInWindow(series.ondas, ms, 'wave_height'), onda_5d_m: waveBefore(series.ondas, o.key, 120), onda_periodo_s: o.vals[1],
         onda_de: o.vals[2] != null ? sector(o.vals[2]) : null,
         vento_kmh: worstInWindow(series.vento, ms, 'wind_speed_10m'), vento_de: w.vals[1] != null ? sector(w.vals[1]) : null,
-        vento_sul_24h_pct: southShare(series.vento, w.key), chuva_48h_mm: rainBefore(series.vento, w.key),
+        sul_7d_pct: southShare(series.vento, w.key, 168), sul_30d_pct: southShare(series.vento, w.key, 720),
+        chuva_48h_mm: rainBefore(series.vento, w.key),
         // API: direção "para onde vai". Com velocidade 0 ela devolve 90° (vetor nulo): corrente parada, sem direção.
         corrente_kmh: c.vals[0], corrente_de: c.vals[1] != null && c.vals[0] !== 0 ? sector(c.vals[1] + 180) : null,
         lua, iluminacao_pct: ilum, hora_modelo: w.key.slice(11, 16),
@@ -658,7 +713,7 @@ async function run() {
       // Graus de ONDE vem (corrente da API é "para onde vai": +180°); usados na avaliação das direções.
       row._graus = {vento: w.vals[1], ondas: o.vals[2], corrente: c.vals[1] != null && c.vals[0] !== 0 ? (c.vals[1] + 180) % 360 : null};
       const v = verdict(row, cfg);
-      Object.assign(row, {veredicto: v.result, nota: v.score, motivo: v.text});
+      Object.assign(row, {veredicto: v.result, mar: v.mar, visibilidade: v.vis, nota: v.score, motivo: v.text});
       [row.confianca, row.obs_confianca] = confidence(ms, today, v.colors, [
         ['vento', spread(raw.vento, w.key, 'wind_speed_10m'), 5, ' km/h'],
         ['ondas', spread(raw.ondas, w.key, 'wave_height'), .25, ' m']]);
@@ -702,7 +757,8 @@ function render(rows, cfg, start, end, meta) {
     `Previsão consultada em ${localISO(Date.parse(meta.consulta)).slice(8, 10)}/${localISO(Date.parse(meta.consulta)).slice(5, 7)} às ` +
     `${localISO(Date.parse(meta.consulta)).slice(11, 16)}`;
   document.getElementById('titulo').textContent = `${ddmm(start)} a ${ddmm(end)}`;
-  const vtxt = v => `<span class="vtxt v-${CSS_V[v]}">${esc(NOME_V[v])}</span>`;
+  const eixos = r => `<span class="mv"><span class="vtxt v-${CSS_V[r.mar]}"><small>Mar</small> ${esc(NOME_V[r.mar])}</span>
+    <span class="vtxt v-${CSS_VIS[r.visibilidade]}"><small>Visib.</small> ${esc(NOME_VIS[r.visibilidade])}</span></span>`;
 
   // Destaques: os melhores dias (até seis), em ordem cronológica; dentro de cada dia, as janelas que valem a pena.
   const bestDays = groupByDay(rows)
@@ -717,7 +773,7 @@ function render(rows, cfg, start, end, meta) {
       <header><small>${esc(DIA_LONGO(g.day))}</small><b>${esc(diaMes(g.day))}</b></header>
       ${g.boas.map(r => `<button class="win" data-i="${rows.indexOf(r)}">
         <span class="hr">${iconOf(r)} ${esc(r.baixa_mar)}</span>
-        ${vtxt(r.veredicto)}
+        ${eixos(r)}
         <span class="mm">${num(r.mare_m)} m</span></button>`).join('')}
     </article>`).join('') : '<p class="empty">Nenhuma janela razoável no período.</p>';
 
@@ -735,7 +791,7 @@ function render(rows, cfg, start, end, meta) {
     const ss = g.slots.filter(pick);
     if (!ss.length) return '<td><span class="none">—</span></td>';
     return '<td><div class="stack">' + ss.map(r => `<button class="cell v-${CSS_V[r.veredicto]}" data-i="${rows.indexOf(r)}"
-      title="${esc(`${NOME_V[r.veredicto]} — ${r.motivo}`)}" aria-label="${esc(`${dayLabel(g.day)} ${periodName(r)} ${r.baixa_mar}: ${NOME_V[r.veredicto]}`)}">
+      title="${esc(`${NOME_V[r.veredicto]} (mar ${NOME_V[r.mar].toLowerCase()}, visibilidade ${NOME_VIS[r.visibilidade].toLowerCase()}) — ${r.motivo}`)}" aria-label="${esc(`${dayLabel(g.day)} ${periodName(r)} ${r.baixa_mar}: ${NOME_V[r.veredicto]}`)}">
       <b>${esc(r.baixa_mar)}</b><span>${num(r.mare_m)} m</span></button>`).join('') + '</div></td>';
   }).join('') + '</tr>';
   document.getElementById('cal').innerHTML = `<thead><tr>${head}</tr></thead><tbody>` +
@@ -773,6 +829,8 @@ function render(rows, cfg, start, end, meta) {
         <p class="t"><small>${esc(DIA_LONGO(next._day))}</small>${esc(diaMes(next._day))}</p>
         <p class="when">baixa-mar às ${esc(next.baixa_mar)} · ${periodName(next)}</p>
         <p class="v"><span class="pill">${esc(NOME_V[next.veredicto])}</span> <small>· confiança ${esc(next.confianca.toLowerCase())}</small></p>
+        <p class="eixos"><span class="vtxt v-${CSS_V[next.mar]}">Mar ${esc(NOME_V[next.mar])}</span>
+          <span class="vtxt v-${CSS_VIS[next.visibilidade]}">Visibilidade ${esc(NOME_VIS[next.visibilidade])}</span></p>
       </div>
       <dl>
         ${stat('Maré', `${num(next.mare_m)} m`, c('mare_m'), 'baixa-mar')}
@@ -798,9 +856,11 @@ function render(rows, cfg, start, end, meta) {
       if (k === 'baixa_mar') return `<td class="hora">${esc(when(r, g.day))}</td>`;
       let css, expl;
       if (k === 'veredicto') { css = 'ver v-' + CSS_V[r[k]]; expl = r.motivo; }
+      else if (k === 'mar') { css = 'ver v-' + CSS_V[r[k]]; expl = 'Maré, ondas e vento na hora, e corrente.'; }
+      else if (k === 'visibilidade') { css = 'ver v-' + CSS_VIS[r[k]]; expl = 'Vento do sul, ondas dos 3 dias, chuva e direção da corrente.'; }
       else [css, expl] = cellStyle(k, r, cfg);
       const v = r[k];
-      const shown = k === 'corrente_de' && r.corrente_kmh === 0 ? 'parada' : v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pt-BR') : k === 'veredicto' ? NOME_V[v] : v;
+      const shown = k === 'corrente_de' && r.corrente_kmh === 0 ? 'parada' : v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pt-BR') : k === 'veredicto' || k === 'mar' ? NOME_V[v] : k === 'visibilidade' ? NOME_VIS[v] : v;
       const dir = {onda_de: 'ondas', vento_de: 'vento', corrente_de: 'corrente'}[k];
       return `<td class="${esc(css)}" title="${esc(expl)}">${dir && v != null ? seta(r._graus[dir]) + ' ' : ''}${esc(shown)}</td>`;
     }).join('') + '</tr>').join('') + '</tbody>').join('');
@@ -822,27 +882,43 @@ function render(rows, cfg, start, end, meta) {
     <h3>O que pesa</h3>
     <ul>
       <li><b>Maré</b> abaixo de ${num(cfg.mare_max)} m (zero da tábua DHN) e <b>ondas</b> até ${num(cfg.onda_max, 1)} m — decisivos.</li>
-      <li><b>Vento</b> até ${cfg.vento_max} km/h. Vento e ondas valem pelo pior valor entre 1 h antes e 1 h depois da
+      <li><b>Vento</b> até ${cfg.vento_max} km/h — só secundário: o alísio de leste não traz sujeira e a força do vento
+      não mostrou efeito na turbidez; acima do limite, o mar fica no máximo regular. Vento e ondas valem pelo pior valor entre 1 h antes e 1 h depois da
       baixa-mar, o tempo de um mergulho.</li>
-      <li><b>Água turva</b>: vento vindo do sul (de 135° a 247°, SE a SO) contorna a barreira do Cabo Branco e suja a água;
-      120°–135° fica no limite. O alísio de leste-sudeste (até 120°), que sopra quase todo dia, não conta. Também pesam
-      as horas de vento sul nas 24 h anteriores e a chuva nas 48 h anteriores (escoamento dos rios e da cidade):
-      até ${CHUVA.verde} mm ok, até ${CHUVA.amarelo} mm no limite.</li>
+      <li><b>Visibilidade</b>, calibrada com 280 dias de turbidez medida por satélite (Kd490, NOAA, jan–nov/2026):
+      <b>mar mexido</b> por dias revolve a areia (média das ondas nos 5 dias anteriores até ${num(VIS.onda, 2)} m) e
+      <b>semanas de vento sul</b> (SE a SO, 135°–247°) trazem sedimento do Cabo Branco e dos rios (mais de ${VIS.sul30}% das
+      horas nos 30 dias anteriores). O mesmo mar de ~1 m deixa a água turva no inverno, depois de semanas de vento sul, e só
+      média na primavera, quando o vento sul já parou. Direção do vento na hora, chuva e direção da corrente foram testadas
+      e não melhoraram a previsão; ficam só como informação.</li>
       <li><b>Corrente</b> até ${num(cfg.corrente_max, 1)} km/h e sua direção — só secundária: o modelo fica a ~5 km, em degraus
       de 0,2 km/h, e não enxerga os canais do recife. Abaixo de ${num(CORRENTE_MIN_DIR, 1)} km/h a direção é ignorada.</li>
     </ul>
     <p>Cada critério fica verde, amarelo (até ${Math.round(cfg.margem * 100)}% além do limite) ou vermelho.</p>
-    <h3>Veredicto</h3>
+    <h3>Duas classificações</h3>
+    <p>Cada baixa-mar recebe duas notas separadas:</p>
     <ul>
-      <li><b>Excelente</b> — tudo verde, com maré, ondas e vento até ${Math.round(FOLGA_EXCELENTE * 100)}% do limite
-      (≤ ${num(cfg.mare_max * FOLGA_EXCELENTE)} m, ${num(cfg.onda_max * FOLGA_EXCELENTE, 2)} m e ${num(cfg.vento_max * FOLGA_EXCELENTE)} km/h)
-      e nota ≥ ${NOTA_EXCELENTE.toLocaleString('pt-BR')}.</li>
-      <li><b>Bom</b> — tudo verde.</li>
-      <li><b>Regular</b> — um ou dois critérios no limite, ou a corrente fora do ideal.</li>
-      <li><b>Ruim</b> — um critério vermelho, ou três no limite.</li>
+      <li><b>Mar</b> — dá para mergulhar com conforto? Maré e ondas na hora decidem; força do vento e da corrente são secundárias.
+      Usa a escala abaixo.</li>
+      <li><b>Visibilidade</b> — a água deve estar limpa? <b>Ruim</b> com vento sul em mais de ${VIS.sul30}% das horas dos
+      30 dias anteriores; <b>boa</b> com ondas dos 5 dias até ${num(VIS.onda, 2)} m e vento sul em no máximo ${VIS.sul7}% das
+      horas dos 7 dias anteriores; <b>média</b> no resto. Em 280 dias comparados com o satélite, nenhum dia turvo saiu
+      como boa e nenhum dia limpo ou médio saiu como ruim; a classe exata bateu em ~80%. A "média" absorve as viradas de
+      estação. O satélite mede a 2–4 km da costa: no recife a água pode diferir.</li>
+    </ul>
+    <p>O <b>veredicto</b> geral vem da <b>nota</b> (0–10, média ponderada de todos os critérios): ≥ 9 excelente,
+    7–8,9 bom, 5–6,9 regular, 3–4,9 ruim, abaixo de 3 péssimo. Os dois eixos impõem um teto: visibilidade média → no
+    máximo regular; mar ou visibilidade ruim → no máximo ruim; os dois ruins → péssimo. Quando o teto rebaixa o
+    veredicto, a nota é limitada à faixa dele, para nunca contradizê-lo. Escala do mar (o teto que ele impõe):</p>
+    <ul>
+      <li><b>Excelente</b> — tudo verde, com maré e ondas até ${Math.round(FOLGA_EXCELENTE * 100)}% do limite
+      (≤ ${num(cfg.mare_max * FOLGA_EXCELENTE)} m e ${num(cfg.onda_max * FOLGA_EXCELENTE, 2)} m).</li>
+      <li><b>Bom</b> — maré e ondas dentro do limite, mas perto dele.</li>
+      <li><b>Regular</b> — maré ou ondas no limite, ou vento ou corrente acima do limite.</li>
+      <li><b>Ruim</b> — maré ou ondas acima do limite.</li>
       <li><b>Péssimo</b> — dois vermelhos, ou maré/ondas muito acima (maré ≥ ${num(cfg.mare_max * (1 + 2 * cfg.margem))} m).</li>
     </ul>
-    <p>A <b>nota</b> (0–10) desempata janelas com o mesmo veredicto. A <b>confiança</b> é alta até 2 dias à frente,
+    <p>A <b>confiança</b> é alta até 2 dias à frente,
     média até 6 e baixa depois; cai quando os modelos discordam ou falta a previsão de corrente (ela só cobre uns 10 dias).
     Os limites de vento e ondas são um ponto de partida: vale ajustá-los comparando com mergulhos reais.</p>
     <h3>Fontes</h3>
@@ -866,7 +942,7 @@ function mapa(r, c) {
   const setas = rot == null ? '' : `<g class="m-setas" style="color:${SETA}">` + MAPA_PONTOS.map(([x, y]) =>
     `<path transform="translate(${x} ${y}) rotate(${rot})" d="M0 7V-6M-3.6-2.2L0-7 3.6-2.2"/>`).join('') + '</g>';
   const valor = fin(vel) ? `${vento ? Math.round(vel) : num(vel, 1)} km/h` : 'sem previsão';
-  const aval = !vento && vel === 0 ? '' : {verde: 'direção boa', amarelo: 'direção no limite', vermelho: 'vem do sul: suja a água'}[corDir] || '';
+  const aval = !vento && vel === 0 ? '' : {verde: 'direção boa', amarelo: 'direção no limite', vermelho: 'vem do sul'}[corDir] || '';
   return `<figure class="mapa">
     <div class="m-modos" role="group" aria-label="Variável do mapa">
       <button type="button" data-modo="vento" aria-pressed="${vento}">Vento</button>
@@ -908,15 +984,22 @@ function select(i, cfg = lastCfg, scroll = true) {
       <p class="note">sol nasce ${esc(r._sol[0])} · se põe ${esc(r._sol[1])}</p>
       <p><span class="vtxt v-${CSS_V[r.veredicto]}">${esc(NOME_V[r.veredicto])}</span>
         <span class="note"> · nota ${num(r.nota, 1)} · confiança ${esc(r.confianca.toLowerCase())}</span></p>
+      <p class="eixos"><span class="vtxt v-${CSS_V[r.mar]}">Mar ${esc(NOME_V[r.mar])}</span>
+        <span class="vtxt v-${CSS_VIS[r.visibilidade]}">Visibilidade ${esc(NOME_VIS[r.visibilidade])}</span></p>
       <p class="why">${esc(r.motivo.charAt(0).toUpperCase() + r.motivo.slice(1))}.</p>
     </div>
     <dl>
+      <div class="grp"><span class="vtxt v-${CSS_V[r.mar]}">Mar · ${esc(NOME_V[r.mar])}</span></div>
       ${item('Maré', `${num(r.mare_m)} m`, c('mare_m'))}
       ${item('Ondas', `${num(r.onda_m)} m`, c('onda_m'), fin(r.onda_periodo_s) ? `${seta(r._graus.ondas)} de ${esc(r.onda_de)}, ${num(r.onda_periodo_s, 1)} s` : '')}
-      ${item('Vento', speed(r.vento_kmh, 1), worst(c('vento_kmh'), c('vento_de')), r.vento_de ? `${seta(r._graus.vento)} de ${esc(r.vento_de)}` : '')}
-      ${item('Vento sul nas 24 h', r.vento_sul_24h_pct == null ? '—' : `${r.vento_sul_24h_pct}%`, c('vento_sul_24h_pct'))}
-      ${item('Chuva nas 48 h', r.chuva_48h_mm == null ? '—' : `${num(r.chuva_48h_mm, 1)} mm`, c('chuva_48h_mm'))}
-      ${item('Corrente', speed(r.corrente_kmh, 2), worst(c('corrente_kmh'), c('corrente_de')), r.corrente_kmh === 0 ? 'parada' : r.corrente_de ? `${seta(r._graus.corrente)} de ${esc(r.corrente_de)}` : '')}
+      ${item('Vento', speed(r.vento_kmh, 1), c('vento_kmh'), r.vento_de ? `${seta(r._graus.vento)} de ${esc(r.vento_de)}` : '')}
+      ${item('Corrente', speed(r.corrente_kmh, 2), c('corrente_kmh'), r.corrente_kmh === 0 ? 'parada' : '')}
+      <div class="grp"><span class="vtxt v-${CSS_VIS[r.visibilidade]}">Visibilidade · ${esc(NOME_VIS[r.visibilidade])}</span></div>
+      ${item('Ondas nos 5 dias', r.onda_5d_m == null ? '—' : `${num(r.onda_5d_m, 2)} m`, c('onda_5d_m'), 'média')}
+      ${item('Vento sul em 7 dias', r.sul_7d_pct == null ? '—' : `${r.sul_7d_pct}%`, c('sul_7d_pct'), 'das horas')}
+      ${item('Vento sul em 30 dias', r.sul_30d_pct == null ? '—' : `${r.sul_30d_pct}%`, c('sul_30d_pct'), 'das horas')}
+      ${item('Chuva nas 48 h', r.chuva_48h_mm == null ? '—' : `${num(r.chuva_48h_mm, 1)} mm`, '', 'informativo')}
+      <div class="grp"></div>
       ${item('Lua', `${Math.round(r.iluminacao_pct)}%`, '', esc(r.lua.toLowerCase()))}
     </dl>
     ${mapa(r, c)}`;
@@ -944,9 +1027,9 @@ function groupByDay(rows) {
 const when = r => r.baixa_mar;
 
 // Colunas das linhas de horário (tabela e CSV); motivo, modelos e obs_confianca ficam fora.
-const COLUNAS = [['periodo', ''], ['baixa_mar', 'baixa'], ['veredicto', 'veredicto'], ['nota', 'nota'],
+const COLUNAS = [['periodo', ''], ['baixa_mar', 'baixa'], ['veredicto', 'veredicto'], ['mar', 'mar'], ['visibilidade', 'visibilidade'], ['nota', 'nota'],
   ['confianca', 'confiança'], ['mare_m', 'maré m'], ['onda_m', 'ondas m'], ['onda_periodo_s', 'período s'],
-  ['onda_de', 'ondas de'], ['vento_kmh', 'vento km/h'], ['vento_de', 'vento de'], ['vento_sul_24h_pct', 'sul 24 h %'], ['chuva_48h_mm', 'chuva 48 h mm'],
+  ['onda_de', 'ondas de'], ['onda_5d_m', 'ondas 5 d m'], ['vento_kmh', 'vento km/h'], ['vento_de', 'vento de'], ['sul_7d_pct', 'sul 7 d %'], ['sul_30d_pct', 'sul 30 d %'], ['chuva_48h_mm', 'chuva 48 h mm'],
   ['corrente_kmh', 'corrente km/h'], ['corrente_de', 'corrente de'], ['lua', 'lua'], ['iluminacao_pct', 'ilum. %']];
 let lastDays = [];
 
