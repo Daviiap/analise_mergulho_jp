@@ -186,9 +186,6 @@ table.full{border-collapse:collapse;font-size:12.5px;width:max-content;min-width
 .full td.ver{background:var(--c);color:var(--on);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
 .verde{background:var(--verde-bg);color:var(--verde-fg)}.amarelo{background:var(--amarelo-bg);color:var(--amarelo-fg)}
 .vermelho{background:var(--vermelho-bg);color:var(--vermelho-fg)}.sem-dados{background:var(--cinza-bg);color:var(--cinza-fg)}
-.prose{max-width:72ch;font-size:14px}
-.prose h3{font:600 16px/1.3 Fraunces,Georgia,serif;margin:22px 0 6px}
-.prose ul{padding-left:18px}.prose li{margin:3px 0}
 pre{background:var(--panel);padding:12px;overflow:auto;font-size:11.5px;max-height:320px}
 footer{margin-top:48px;padding-top:14px;border-top:2px solid var(--ink);font-size:12px;color:var(--muted)}
 #resultado[hidden]{display:none}
@@ -306,12 +303,6 @@ footer{margin-top:48px;padding-top:14px;border-top:2px solid var(--ink);font-siz
     <p class="note" style="margin-bottom:10px">Passe o mouse numa célula para ver o limite; no veredicto, o motivo.
       <button type="button" class="quiet" id="csv">Baixar CSV</button></p>
     <div class="scroll"><table class="full" id="tabela"></table></div>
-  </details>
-
-  <details class="more">
-    <summary><h2>Como funciona</h2></summary>
-    <div class="prose" id="regras"></div>
-    <details><summary class="note" style="cursor:pointer;margin:16px 0 8px">Modelos, coordenadas e erros da consulta</summary><pre id="meta"></pre></details>
   </details>
 
   <footer>
@@ -868,66 +859,6 @@ function render(rows, cfg, start, end, meta) {
       return `<td class="${esc(css)}" title="${esc(expl)}">${dir && v != null ? seta(r._graus[dir]) + ' ' : ''}${esc(shown)}</td>`;
     }).join('') + '</tr>').join('') + '</tbody>').join('');
   document.getElementById('tabela').innerHTML = `<thead><tr>${thead}</tr></thead>${body}`;
-
-  document.getElementById('regras').innerHTML = `
-    <p>Local: <b>recife do Caribessa</b>, no Bessa (${String(cfg.lat).replace('.', ',')}, ${String(cfg.lon).replace('.', ',')}).
-    Cada modelo usa a célula de grade mais próxima do recife: vento e ondas (ECMWF) a ~1,5 km, sobre o mar;
-    corrente (Météo-France) a ~5 km, mar adentro. O nascer e o pôr do sol são calculados para o ponto exato.
-    A maré vem da tábua do Porto de Cabedelo, a estação oficial mais próxima (cerca de 10 km ao norte); no Bessa
-    a baixa-mar pode diferir alguns minutos.</p>
-    <p>Limites para a faixa costeira (até 2 km): os modelos têm resolução de 8–9 km e não enxergam a quebra das
-    ondas no recife, as piscinas nem os canais; a corrente vem em degraus de 0,2 km/h e só em N, S, L ou O.
-    Use como triagem e confirme no local.</p>
-    <p>Para cada baixa-mar dos próximos 15 dias, a página cruza a tábua oficial de marés com a previsão de
-    vento, ondas e corrente na hora mais próxima. Baixas entre o nascer e o pôr do sol
-    (calculados para cada dia na coordenada da praia) contam como mergulho de dia; as outras, como mergulho noturno.
-    A partir de 00:00 a baixa já pertence ao dia seguinte.</p>
-    <h3>O que pesa</h3>
-    <ul>
-      <li><b>Maré</b> abaixo de ${num(cfg.mare_max)} m (zero da tábua DHN) e <b>ondas</b> até ${num(cfg.onda_max, 1)} m — decisivos.</li>
-      <li><b>Vento</b> até ${cfg.vento_max} km/h — só secundário: o alísio de leste não traz sujeira e a força do vento
-      não mostrou efeito na turbidez; acima do limite, o mar fica no máximo regular. Vento e ondas valem pelo pior valor entre 1 h antes e 1 h depois da
-      baixa-mar, o tempo de um mergulho.</li>
-      <li><b>Visibilidade</b>, calibrada com 280 dias de turbidez medida por satélite (Kd490, NOAA, jan–nov/2026):
-      <b>mar mexido</b> por dias revolve a areia (média das ondas nos 5 dias anteriores até ${num(VIS.onda, 2)} m) e
-      <b>semanas de vento sul</b> (SE a SO, 135°–247°) trazem sedimento do Cabo Branco e dos rios (mais de ${VIS.sul30}% das
-      horas nos 30 dias anteriores). O mesmo mar de ~1 m deixa a água turva no inverno, depois de semanas de vento sul, e só
-      média na primavera, quando o vento sul já parou. Direção do vento na hora, chuva e direção da corrente foram testadas
-      e não melhoraram a previsão; ficam só como informação.</li>
-      <li><b>Corrente</b> até ${num(cfg.corrente_max, 1)} km/h e sua direção — só secundária: o modelo fica a ~5 km, em degraus
-      de 0,2 km/h, e não enxerga os canais do recife. Abaixo de ${num(CORRENTE_MIN_DIR, 1)} km/h a direção é ignorada.</li>
-    </ul>
-    <p>Cada critério fica verde, amarelo (até ${Math.round(cfg.margem * 100)}% além do limite) ou vermelho.</p>
-    <h3>Duas classificações</h3>
-    <p>Cada baixa-mar recebe duas notas separadas:</p>
-    <ul>
-      <li><b>Mar</b> — dá para mergulhar com conforto? Maré e ondas na hora decidem; força do vento e da corrente são secundárias.
-      Usa a escala abaixo.</li>
-      <li><b>Visibilidade</b> — a água deve estar limpa? <b>Ruim</b> com vento sul em mais de ${VIS.sul30}% das horas dos
-      30 dias anteriores; <b>boa</b> com ondas dos 5 dias até ${num(VIS.onda, 2)} m e vento sul em no máximo ${VIS.sul7}% das
-      horas dos 7 dias anteriores; <b>média</b> no resto. Em 280 dias comparados com o satélite, nenhum dia turvo saiu
-      como boa e nenhum dia limpo ou médio saiu como ruim; a classe exata bateu em ~80%. A "média" absorve as viradas de
-      estação. O satélite mede a 2–4 km da costa: no recife a água pode diferir.</li>
-    </ul>
-    <p>O <b>veredicto</b> geral vem da <b>nota</b> (0–10, média ponderada de todos os critérios): ≥ 9 excelente,
-    7–8,9 bom, 5–6,9 regular, 3–4,9 ruim, abaixo de 3 péssimo. Os dois eixos impõem um teto: visibilidade média → no
-    máximo regular; mar ou visibilidade ruim → no máximo ruim; os dois ruins → péssimo. Quando o teto rebaixa o
-    veredicto, a nota é limitada à faixa dele, para nunca contradizê-lo. Escala do mar (o teto que ele impõe):</p>
-    <ul>
-      <li><b>Excelente</b> — tudo verde, com maré e ondas até ${Math.round(FOLGA_EXCELENTE * 100)}% do limite
-      (≤ ${num(cfg.mare_max * FOLGA_EXCELENTE)} m e ${num(cfg.onda_max * FOLGA_EXCELENTE, 2)} m).</li>
-      <li><b>Bom</b> — maré e ondas dentro do limite, mas perto dele.</li>
-      <li><b>Regular</b> — maré ou ondas no limite, ou vento ou corrente acima do limite.</li>
-      <li><b>Ruim</b> — maré ou ondas acima do limite.</li>
-      <li><b>Péssimo</b> — dois vermelhos, ou maré/ondas muito acima (maré ≥ ${num(cfg.mare_max * (1 + 2 * cfg.margem))} m).</li>
-    </ul>
-    <p>A <b>confiança</b> é alta até 2 dias à frente,
-    média até 6 e baixa depois; cai quando os modelos discordam ou falta a previsão de corrente (ela só cobre uns 10 dias).
-    Os limites de vento e ondas são um ponto de partida: vale ajustá-los comparando com mergulhos reais.</p>
-    <h3>Fontes</h3>
-    <p>Vento: ECMWF IFS 9 km, completado pelo GFS. Ondas: ECMWF WAM 9 km, depois Météo-France e NOAA.
-    Corrente: Météo-France SMOC 8 km. As ondas são previstas em mar aberto; dentro das piscinas a barreira de recifes as atenua.</p>`;
-  document.getElementById('meta').textContent = JSON.stringify(meta, null, 2);
 }
 
 // Mapinha do Bessa no estilo dos mapas de previsão: grade regular de setinhas apontando para onde
